@@ -23,13 +23,18 @@ A financial tracking application built with Bun, Elysia, and Vue.
 1. Clone the repository
 ```bash
 git clone https://github.com/Rexomon/Finance-tracker.git
+```
 
-# Backend
+2. Set up and run backend
+```bash
 cd fin-bk
 bun install
 bun dev
+```
 
-# Frontend
+3. Set up and run frontend
+```bash
 cd fin-fr
 bun install
 bun dev
+```
