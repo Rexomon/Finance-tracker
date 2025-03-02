@@ -29,7 +29,7 @@ const Auth = (app: Elysia) =>
 						set.status = 401;
 						return { message: "Unauthorized" };
 					}
-          
+
 					const RedisAccessToken = await redis.get(
 						`RefreshToken:${decoded.id}`,
 					);

@@ -6,6 +6,7 @@ export function JwtAccessToken() {
 	return jwt({
 		name: "JwtAccessToken",
 		secret: passKeySecret,
+    exp: "30m",
 	});
 }
 
@@ -13,5 +14,6 @@ export function JwtRefreshToken() {
 	return jwt({
 		name: "JwtRefreshToken",
 		secret: passKeySecret,
+    exp: "7d",
 	});
 }

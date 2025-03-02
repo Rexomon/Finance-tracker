@@ -1,7 +1,8 @@
-import cors from "@elysiajs/cors";
 import { Elysia } from "elysia";
-import connectToDatabase from "./Database/DatabaseConnection";
+import cors from "@elysiajs/cors";
 import UserRoutes from "./Routes/UserHandling";
+import connectToDatabase from "./Database/DatabaseConnection";
+import TransactionRoutes from "./Routes/TransactionHandling";
 
 connectToDatabase();
 
@@ -16,7 +17,8 @@ const app = new Elysia()
 	.get("/", async () => {
 		return { message: "Hello, There!" };
 	})
-  .use(UserRoutes)
+	.use(UserRoutes)
+	.use(TransactionRoutes)
 	.listen(Bun.env.PORT || 3000);
 
 console.log(

@@ -1,11 +1,10 @@
 import { Elysia } from "elysia";
 import redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
-import { JwtAccessToken, JwtRefreshToken } from "../Middleware/Jwt";
-import UserModel from "../Model/UserModel";
-import { UserLoginTypes, UserRegisterTypes } from "../Types/UserTypes";
 import Headers from "../Middleware/Headers";
-
+import UserModel from "../Model/UserModel";
+import { JwtAccessToken, JwtRefreshToken } from "../Middleware/Jwt";
+import { UserLoginTypes, UserRegisterTypes } from "../Types/UserTypes";
 
 const UserRoutes = new Elysia({ prefix: "/users" })
 	.use(Headers)
@@ -25,7 +24,7 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 
 				const user = await UserModel.findOne({ email: email });
 				if (!user) {
-					set.status = 400;
+					set.status = 401;
 					return { message: "Email or password is incorrect" };
 				}
 
@@ -34,56 +33,56 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 					user.password,
 				);
 				if (!isPasswordMatch) {
-					set.status = 400;
+					set.status = 401;
 					return { message: "Email or password is incorrect" };
 				}
 
 				const currentTime = Math.floor(Date.now() / 1000);
+				const accessTokenExpiry = 60 * 30; // 30 minutes in seconds
+				const refreshTokenExpiry = 60 * 60 * 24 * 7; // 7 days in seconds
 
-				const SessionAccessToken = await JwtAccessToken.sign({
+				const UserAccessToken = await JwtAccessToken.sign({
 					id: user.id,
 					email: user.email,
 					iat: currentTime,
-					exp: currentTime + 60 * 30, // 30 minutes
 				});
 
 				AccessToken.set({
-					value: SessionAccessToken,
+					value: UserAccessToken,
 					secure: true,
 					httpOnly: true,
 					sameSite: "lax",
-					maxAge: 60 * 30,
+					maxAge: accessTokenExpiry,
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				const SessionRefreshToken = await JwtRefreshToken.sign({
+				const UserRefreshToken = await JwtRefreshToken.sign({
 					id: user.id,
 					email: user.email,
 					iat: currentTime,
-					exp: currentTime + 60 * 60 * 24 * 7, // 7 days
 				});
 
 				RefreshToken.set({
-					value: SessionRefreshToken,
+					value: UserRefreshToken,
 					secure: true,
 					httpOnly: true,
 					sameSite: "lax",
-					maxAge: 60 * 60 * 24 * 7,
+					maxAge: refreshTokenExpiry,
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
 				await redis.set(
 					`RefreshToken:${user.id}`,
-					SessionRefreshToken,
+					UserRefreshToken,
 					"EX",
-					60 * 60 * 24 * 7,
+					refreshTokenExpiry,
 				);
-
 				set.status = 200;
 				return { message: "Login success" };
 			} catch (error) {
 				set.status = 500;
 				console.error(error);
+				return { message: "An internal server error occurred" };
 			}
 		},
 		{ body: UserLoginTypes },
@@ -128,6 +127,7 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 			} catch (error) {
 				set.status = 500;
 				console.error(error);
+				return { message: "An internal server error occurred" };
 			}
 		},
 		{
@@ -148,63 +148,65 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 			}
 
 			try {
-				const decoded = await JwtRefreshToken.verify(RefreshToken.value);
-				if (!decoded) {
+				const decodedToken = await JwtRefreshToken.verify(RefreshToken.value);
+				if (!decodedToken) {
 					set.status = 401;
 					return { message: "Unauthorized" };
 				}
 
-				const RedisRefreshToken = await redis.get(`RefreshToken:${decoded.id}`);
+				const RedisRefreshToken = await redis.get(
+					`RefreshToken:${decodedToken.id}`,
+				);
 				if (RefreshToken.value !== RedisRefreshToken) {
 					set.status = 401;
 					return { message: "Unauthorized" };
 				}
 
-				const user = await UserModel.findOne({ _id: decoded.id });
+				const user = await UserModel.findOne({ _id: decodedToken.id });
 				if (!user) {
 					set.status = 401;
 					return { message: "Unauthorized" };
 				}
 
 				const currentTime = Math.floor(Date.now() / 1000);
+				const accessTokenExpiry = 60 * 30; // 30 minutes in seconds
+				const refreshTokenExpiry = 60 * 60 * 24 * 7; // 7 days in seconds
 
-				const SessionAccessToken = await JwtAccessToken.sign({
+				const UserAccessToken = await JwtAccessToken.sign({
 					id: user.id,
 					email: user.email,
 					iat: currentTime,
-					exp: currentTime + 60 * 30, // 30 minutes
 				});
 
 				AccessToken.set({
-					value: SessionAccessToken,
+					value: UserAccessToken,
 					secure: true,
 					httpOnly: true,
 					sameSite: "lax",
-					maxAge: 60 * 30,
+					maxAge: accessTokenExpiry,
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				const SessionRefreshToken = await JwtRefreshToken.sign({
+				const UserRefreshToken = await JwtRefreshToken.sign({
 					id: user.id,
 					email: user.email,
 					iat: currentTime,
-					exp: currentTime + 60 * 60 * 24 * 7, // 7 days
 				});
 
 				RefreshToken.set({
-					value: SessionRefreshToken,
+					value: UserRefreshToken,
 					secure: true,
 					httpOnly: true,
 					sameSite: "lax",
-					maxAge: 60 * 60 * 24 * 7,
+					maxAge: refreshTokenExpiry,
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
 				await redis.set(
 					`RefreshToken:${user.id}`,
-					SessionRefreshToken,
+					UserRefreshToken,
 					"EX",
-					60 * 60 * 24 * 7,
+					refreshTokenExpiry,
 				);
 
 				set.status = 200;
