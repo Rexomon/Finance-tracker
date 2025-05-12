@@ -26,8 +26,8 @@ const Auth = (app: Elysia) =>
 
 					const isUserExist = await UserModel.findOne({ _id: decoded.id });
 					if (!isUserExist) {
-						set.status = 401;
-						return { message: "Unauthorized" };
+						set.status = 404;
+						return { message: "User not found" };
 					}
 
 					const RedisAccessToken = await redis.get(

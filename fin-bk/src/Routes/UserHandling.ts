@@ -1,13 +1,11 @@
 import { Elysia } from "elysia";
 import redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
-import Headers from "../Middleware/Headers";
 import UserModel from "../Model/UserModel";
 import { JwtAccessToken, JwtRefreshToken } from "../Middleware/Jwt";
 import { UserLoginTypes, UserRegisterTypes } from "../Types/UserTypes";
 
-const UserRoutes = new Elysia({ prefix: "/users" })
-	.use(Headers)
+const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 	.use(JwtAccessToken())
 	.use(JwtRefreshToken())
 	.post(
@@ -58,7 +56,6 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 
 				const UserRefreshToken = await JwtRefreshToken.sign({
 					id: user.id,
-					email: user.email,
 					iat: currentTime,
 				});
 
@@ -130,9 +127,7 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 				return { message: "An internal server error occurred" };
 			}
 		},
-		{
-			body: UserRegisterTypes,
-		},
+		{ body: UserRegisterTypes },
 	)
 	.post(
 		"/refresh",
@@ -164,8 +159,8 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 
 				const user = await UserModel.findOne({ _id: decodedToken.id });
 				if (!user) {
-					set.status = 401;
-					return { message: "Unauthorized" };
+					set.status = 404;
+					return { message: "User does not exist" };
 				}
 
 				const currentTime = Math.floor(Date.now() / 1000);
@@ -189,7 +184,6 @@ const UserRoutes = new Elysia({ prefix: "/users" })
 
 				const UserRefreshToken = await JwtRefreshToken.sign({
 					id: user.id,
-					email: user.email,
 					iat: currentTime,
 				});
 

@@ -4,7 +4,10 @@ import Auth from "../Middleware/Auth";
 import TransactionModel from "../Model/TransactionModel";
 import TransactionsTypes from "../Types/TransactionsTypes";
 
-const TransactionRoutes = new Elysia({ prefix: "/transactions" })
+const TransactionRoutes = new Elysia({
+	prefix: "/transactions",
+	detail: { tags: ["Transaction"] },
+})
 	.use(Auth)
 	.post(
 		"/",
@@ -13,6 +16,7 @@ const TransactionRoutes = new Elysia({ prefix: "/transactions" })
 				set.status = 401;
 				return { message: "Unauthorized" };
 			}
+
 			try {
 				const { amount, type, description, date } = body;
 
@@ -50,9 +54,12 @@ const TransactionRoutes = new Elysia({ prefix: "/transactions" })
 				return { transactions: JSON.parse(cacheTransactions) };
 			}
 
-			const transactions = await TransactionModel.find({
-				userId: user.id,
-			});
+			const transactions = await TransactionModel.find(
+				{
+					userId: user.id,
+				},
+				{ __v: 0 },
+			).sort({ date: -1 });
 
 			await redis.set(
 				`transactions:${user.id}`,
@@ -76,6 +83,7 @@ const TransactionRoutes = new Elysia({ prefix: "/transactions" })
 				set.status = 401;
 				return { message: "Unauthorized" };
 			}
+
 			try {
 				const updatedTransaction = await TransactionModel.findOneAndUpdate(
 					{ _id: id, userId: user.id },

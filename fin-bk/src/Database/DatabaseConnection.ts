@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const connectToDatabase = async () => {
-	const dbConnectString: string = Bun.env.DATABASE_URI as string;
+	const dbConnectString: string = Bun.env.DATABASE_URL as string;
 
 	if (!dbConnectString) {
 		console.error("Database connection string is not defined");
