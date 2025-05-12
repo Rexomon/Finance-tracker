@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import redis from "../Config/Redis";
+import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import UserModel from "../Model/UserModel";
 import { JwtAccessToken, JwtRefreshToken } from "../Middleware/Jwt";
@@ -68,7 +68,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				await redis.set(
+				await Redis.set(
 					`RefreshToken:${user.id}`,
 					UserRefreshToken,
 					"EX",
@@ -149,7 +149,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					return { message: "Unauthorized" };
 				}
 
-				const RedisRefreshToken = await redis.get(
+				const RedisRefreshToken = await Redis.get(
 					`RefreshToken:${decodedToken.id}`,
 				);
 				if (RefreshToken.value !== RedisRefreshToken) {
@@ -196,7 +196,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				await redis.set(
+				await Redis.set(
 					`RefreshToken:${user.id}`,
 					UserRefreshToken,
 					"EX",
@@ -223,7 +223,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 			AccessToken.remove();
 			RefreshToken.remove();
 
-			await redis.del(`RefreshToken:${user.id}`);
+			await Redis.del(`RefreshToken:${user.id}`);
 
 			set.status = 200;
 			return { message: "Logout success" };

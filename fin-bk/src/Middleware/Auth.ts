@@ -1,5 +1,5 @@
 import type Elysia from "elysia";
-import redis from "../Config/Redis";
+import Redis from "../Config/Redis";
 import UserModel from "../Model/UserModel";
 import { JwtAccessToken } from "./Jwt";
 
@@ -30,7 +30,7 @@ const Auth = (app: Elysia) =>
 						return { message: "User not found" };
 					}
 
-					const RedisAccessToken = await redis.get(
+					const RedisAccessToken = await Redis.get(
 						`RefreshToken:${decoded.id}`,
 					);
 					if (RefreshToken.value !== RedisAccessToken) {

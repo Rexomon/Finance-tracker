@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import redis from "../Config/Redis";
+import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import TransactionModel from "../Model/TransactionModel";
 import TransactionsTypes from "../Types/TransactionsTypes";
@@ -20,15 +20,16 @@ const TransactionRoutes = new Elysia({
 			try {
 				const { amount, type, description, date } = body;
 
-				await TransactionModel.create({
+				const transactionData = {
 					userId: user.id,
 					amount,
 					type,
 					description,
 					date,
-				});
+				};
+				await TransactionModel.create(transactionData);
 
-				await redis.del(`transactions:${user.id}`);
+				await Redis.del(`transactions:${user.id}`);
 
 				set.status = 201;
 				return { message: "Transaction created" };
@@ -47,7 +48,7 @@ const TransactionRoutes = new Elysia({
 		}
 
 		try {
-			const cacheTransactions = await redis.get(`transactions:${user.id}`);
+			const cacheTransactions = await Redis.get(`transactions:${user.id}`);
 
 			if (cacheTransactions) {
 				set.status = 200;
@@ -58,10 +59,10 @@ const TransactionRoutes = new Elysia({
 				{
 					userId: user.id,
 				},
-				{ __v: 0 },
+				{ userId: 0, __v: 0 },
 			).sort({ date: -1 });
 
-			await redis.set(
+			await Redis.set(
 				`transactions:${user.id}`,
 				JSON.stringify(transactions),
 				"EX",
@@ -98,7 +99,7 @@ const TransactionRoutes = new Elysia({
 					return { message: "Transaction not found" };
 				}
 
-				await redis.del(`transactions:${user.id}`);
+				await Redis.del(`transactions:${user.id}`);
 
 				set.status = 200;
 				return { message: "Transaction updated" };
@@ -132,7 +133,7 @@ const TransactionRoutes = new Elysia({
 				return { message: "Transaction not found" };
 			}
 
-			await redis.del(`transactions:${user.id}`);
+			await Redis.del(`transactions:${user.id}`);
 
 			set.status = 200;
 			return { message: "Transaction deleted" };

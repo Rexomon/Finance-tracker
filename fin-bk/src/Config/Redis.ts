@@ -1,8 +1,8 @@
 import Redis from "ioredis";
 
-const RedisUri = Bun.env.REDIS_URL as string;
+const RedisUrl = Bun.env.REDIS_URL as string;
 
-const redis = new Redis(RedisUri);
+const redis = new Redis(RedisUrl);
 
 redis.on("connect", () => {
   console.log("🚀 Redis connected");

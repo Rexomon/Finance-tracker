@@ -5,6 +5,7 @@ import Headers from "./Middleware/Headers";
 import UserRoutes from "./Routes/UserHandling";
 import connectToDatabase from "./Database/DatabaseConnection";
 import TransactionRoutes from "./Routes/TransactionHandling";
+import BudgetRoutes from "./Routes/BudgetHandling";
 
 connectToDatabase();
 
@@ -13,12 +14,14 @@ const app = new Elysia()
 		swagger({
 			documentation: {
 				info: {
-					title: "Finance Backend API",
+					title: "Finance Tracker API - Elysia JS",
+          description: "API for managing personal finances",
           version: "1.0.0"
 				},
         tags: [
           { name: "User", description: "User related endpoints" },
           { name: "Transaction", description: "Transaction related endpoints" },
+          { name: "Budget", description: "Budget related endpoints" },
         ],
 			},
 		}),
@@ -39,6 +42,7 @@ const app = new Elysia()
 	})
 	.use(UserRoutes)
 	.use(TransactionRoutes)
+  .use(BudgetRoutes)
 	.listen(Bun.env.PORT || 3000);
 
 console.log(
