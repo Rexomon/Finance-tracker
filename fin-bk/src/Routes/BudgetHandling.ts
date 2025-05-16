@@ -29,23 +29,26 @@ const BudgetRoutes = new Elysia({
 
 				if (existingBudget) {
 					set.status = 409;
-					return { message: "Budget already exists for the category for this month" };
+					return {
+						message: "Budget already exists for the category for this month",
+					};
 				}
 
 				const budgetData = {
-          userId: user.id,
-          category,
-          limit,
-          month,
-          year
-        };
-        await BudgetModel.create(budgetData);
+					userId: user.id,
+					category,
+					limit,
+					month,
+					year,
+				};
+				await BudgetModel.create(budgetData);
 
 				set.status = 201;
 				return { message: "Budget created successfully" };
 			} catch (error) {
 				set.status = 500;
-				return { message: "Internal server error", error };
+				console.error(error);
+				return { message: "An internal server error occurred" };
 			}
 		},
 		{ body: BudgetTypes },
@@ -83,8 +86,39 @@ const BudgetRoutes = new Elysia({
 			return { budgets };
 		} catch (error) {
 			set.status = 500;
-			return { message: "Internal server error", error };
+			console.error(error);
+			return { message: "An internal server error occurred" };
 		}
-	});
+	})
+	.delete(
+		"/:TransactionId",
+		async ({ set, user, params: { TransactionId } }) => {
+			if (!user) {
+				set.status = 401;
+				return { message: "Unauthorized" };
+			}
+
+			try {
+				const budget = await BudgetModel.findOneAndDelete({
+					_id: TransactionId,
+					userId: user.id,
+				});
+
+				if (!budget) {
+					set.status = 404;
+					return { message: "Budget not found" };
+				}
+
+				await redis.del(`budgets:${user.id}`);
+
+				set.status = 200;
+				return { message: "Budget deleted successfully" };
+			} catch (error) {
+				set.status = 500;
+				console.error(error);
+				return { message: "An internal server error occurred" };
+			}
+		},
+	);
 
 export default BudgetRoutes;

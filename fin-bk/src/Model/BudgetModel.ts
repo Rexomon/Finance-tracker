@@ -7,18 +7,22 @@ const BudgetSchema = new mongoose.Schema(
 			ref: "User",
 			required: true,
 		},
+
 		category: {
 			type: String,
 			required: true,
 		},
+
 		limit: {
 			type: Number,
 			required: true,
 		},
+
 		month: {
 			type: Number,
 			required: true,
 		},
+    
 		year: {
 			type: Number,
 			required: true,

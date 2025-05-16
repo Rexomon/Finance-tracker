@@ -208,6 +208,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 			} catch (error) {
 				set.status = 500;
 				console.error(error);
+        return { message: "An internal server error occurred" };
 			}
 		},
 	)

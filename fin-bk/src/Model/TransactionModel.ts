@@ -13,6 +13,10 @@ const TransactionSchema = new mongoose.Schema(
 			required: true,
 		},
 
+    category: {
+      type: String,
+    },
+
 		type: {
 			type: String,
 			required: true,

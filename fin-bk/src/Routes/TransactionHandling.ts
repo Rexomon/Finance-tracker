@@ -18,17 +18,18 @@ const TransactionRoutes = new Elysia({
 			}
 
 			try {
-				const { amount, type, description, date } = body;
+				const { amount, category, type, description, date } = body;
 
 				const transactionData = {
 					userId: user.id,
 					amount,
+					category,
 					type,
 					description,
 					date,
 				};
-				await TransactionModel.create(transactionData);
 
+				await TransactionModel.create(transactionData);
 				await Redis.del(`transactions:${user.id}`);
 
 				set.status = 201;
@@ -78,8 +79,8 @@ const TransactionRoutes = new Elysia({
 		}
 	})
 	.put(
-		"/:id",
-		async ({ set, body, user, params: { id } }) => {
+		"/:TransactionId",
+		async ({ set, body, user, params: {  TransactionId} }) => {
 			if (!user) {
 				set.status = 401;
 				return { message: "Unauthorized" };
@@ -87,7 +88,7 @@ const TransactionRoutes = new Elysia({
 
 			try {
 				const updatedTransaction = await TransactionModel.findOneAndUpdate(
-					{ _id: id, userId: user.id },
+					{ _id: TransactionId, userId: user.id },
 					{
 						...body,
 					},
@@ -116,7 +117,7 @@ const TransactionRoutes = new Elysia({
 		},
 		{ body: TransactionsTypes },
 	)
-	.delete("/:id", async ({ set, user, params: { id } }) => {
+	.delete("/:TransactionId", async ({ set, user, params: { TransactionId } }) => {
 		if (!user) {
 			set.status = 401;
 			return { message: "Unauthorized" };
@@ -124,7 +125,7 @@ const TransactionRoutes = new Elysia({
 
 		try {
 			const TransactionIdExist = await TransactionModel.findOneAndDelete({
-				_id: id,
+				_id: TransactionId,
 				userId: user.id,
 			});
 
