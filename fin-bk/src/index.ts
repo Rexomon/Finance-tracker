@@ -3,9 +3,9 @@ import cors from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
 import Headers from "./Middleware/Headers";
 import UserRoutes from "./Routes/UserHandling";
-import connectToDatabase from "./Database/DatabaseConnection";
-import TransactionRoutes from "./Routes/TransactionHandling";
 import BudgetRoutes from "./Routes/BudgetHandling";
+import TransactionRoutes from "./Routes/TransactionHandling";
+import connectToDatabase from "./Database/DatabaseConnection";
 
 connectToDatabase();
 

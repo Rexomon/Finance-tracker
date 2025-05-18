@@ -63,10 +63,9 @@ const TransactionRoutes = new Elysia({
 				{ userId: 0, __v: 0 },
 			).sort({ date: -1 });
 
-			await Redis.set(
+			await Redis.setex(
 				`transactions:${user.id}`,
 				JSON.stringify(transactions),
-				"EX",
 				60 * 30,
 			);
 
@@ -80,7 +79,7 @@ const TransactionRoutes = new Elysia({
 	})
 	.put(
 		"/:TransactionId",
-		async ({ set, body, user, params: {  TransactionId} }) => {
+		async ({ set, body, user, params: { TransactionId } }) => {
 			if (!user) {
 				set.status = 401;
 				return { message: "Unauthorized" };
@@ -117,37 +116,40 @@ const TransactionRoutes = new Elysia({
 		},
 		{ body: TransactionsTypes },
 	)
-	.delete("/:TransactionId", async ({ set, user, params: { TransactionId } }) => {
-		if (!user) {
-			set.status = 401;
-			return { message: "Unauthorized" };
-		}
-
-		try {
-			const TransactionIdExist = await TransactionModel.findOneAndDelete({
-				_id: TransactionId,
-				userId: user.id,
-			});
-
-			if (!TransactionIdExist) {
-				set.status = 404;
-				return { message: "Transaction not found" };
+	.delete(
+		"/:TransactionId",
+		async ({ set, user, params: { TransactionId } }) => {
+			if (!user) {
+				set.status = 401;
+				return { message: "Unauthorized" };
 			}
 
-			await Redis.del(`transactions:${user.id}`);
+			try {
+				const TransactionIdExist = await TransactionModel.findOneAndDelete({
+					_id: TransactionId,
+					userId: user.id,
+				});
 
-			set.status = 200;
-			return { message: "Transaction deleted" };
-		} catch (error) {
-			if (error instanceof Error && error.name === "CastError") {
-				set.status = 400;
-				return { message: "Invalid transaction id" };
+				if (!TransactionIdExist) {
+					set.status = 404;
+					return { message: "Transaction not found" };
+				}
+
+				await Redis.del(`transactions:${user.id}`);
+
+				set.status = 200;
+				return { message: "Transaction deleted" };
+			} catch (error) {
+				if (error instanceof Error && error.name === "CastError") {
+					set.status = 400;
+					return { message: "Invalid transaction id" };
+				}
+
+				set.status = 500;
+				console.error(error);
+				return { message: "An internal server error occurred" };
 			}
-
-			set.status = 500;
-			console.error(error);
-			return { message: "An internal server error occurred" };
-		}
-	});
+		},
+	);
 
 export default TransactionRoutes;

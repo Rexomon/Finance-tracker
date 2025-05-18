@@ -68,10 +68,9 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				await Redis.set(
+				await Redis.setex(
 					`RefreshToken:${user.id}`,
 					UserRefreshToken,
-					"EX",
 					refreshTokenExpiry,
 				);
 				set.status = 200;
@@ -196,10 +195,9 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				await Redis.set(
+				await Redis.setex(
 					`RefreshToken:${user.id}`,
 					UserRefreshToken,
-					"EX",
 					refreshTokenExpiry,
 				);
 

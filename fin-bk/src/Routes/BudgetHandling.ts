@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import redis from "../Config/Redis";
+import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import BudgetTypes from "../Types/BudgetTypes";
 import BudgetModel from "../Model/BudgetModel";
@@ -60,7 +60,7 @@ const BudgetRoutes = new Elysia({
 		}
 
 		try {
-			const cacheBudgets = await redis.get(`budgets:${user.id}`);
+			const cacheBudgets = await Redis.get(`budgets:${user.id}`);
 
 			if (cacheBudgets) {
 				set.status = 200;
@@ -75,11 +75,10 @@ const BudgetRoutes = new Elysia({
 				},
 			).sort({ month: -1 });
 
-			await redis.set(
+			await Redis.setex(
 				`budgets:${user.id}`,
-				JSON.stringify(budgets),
-				"EX",
 				60 * 60 * 24,
+				JSON.stringify(budgets),
 			);
 
 			set.status = 200;
@@ -109,7 +108,7 @@ const BudgetRoutes = new Elysia({
 					return { message: "Budget not found" };
 				}
 
-				await redis.del(`budgets:${user.id}`);
+				await Redis.del(`budgets:${user.id}`);
 
 				set.status = 200;
 				return { message: "Budget deleted successfully" };
