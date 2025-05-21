@@ -5,7 +5,10 @@ const TransactionsTypes = t.Object({
 	category: t.Optional(t.String()),
 	date: t.Date({ error: "Invalid date" }),
 	description: t.String(),
-	type: t.Enum({ income: "income", expense: "expense", error: "Invalid type" }),
+	type: t.Enum(
+		{ income: "income", expense: "expense" },
+		{ error: "Invalid type" },
+	),
 });
 
 export default TransactionsTypes;

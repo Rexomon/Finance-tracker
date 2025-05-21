@@ -3,6 +3,7 @@ import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import TransactionModel from "../Model/TransactionModel";
 import TransactionsTypes from "../Types/TransactionsTypes";
+import BudgetModel from "../Model/BudgetModel";
 
 const TransactionRoutes = new Elysia({
 	prefix: "/transactions",
@@ -28,6 +29,46 @@ const TransactionRoutes = new Elysia({
 					description,
 					date,
 				};
+
+				if (type === "expense") {
+					const month = new Date(date).getMonth() + 1;
+					const year = new Date(date).getFullYear();
+
+					const isBudgetExist = await BudgetModel.findOne({
+						userId: user.id,
+						category,
+						month: month,
+						year: year,
+					});
+
+					if (!isBudgetExist) {
+						set.status = 404;
+						return {
+							message: "Please create a budget for this category first",
+						};
+					}
+
+					const newBudgetLimit = await BudgetModel.findOneAndUpdate(
+						{
+							userId: user.id,
+							category,
+							month: month,
+							year: year,
+							limit: { $gte: amount },
+						},
+						{ $inc: { limit: -amount } },
+						{ new: true },
+					);
+
+					if (!newBudgetLimit) {
+						set.status = 400;
+						return {
+							message: "You don't have enough budget for this transaction",
+						};
+					}
+
+					await Redis.del(`budgets:${user.id}`);
+				}
 
 				await TransactionModel.create(transactionData);
 				await Redis.del(`transactions:${user.id}`);
@@ -65,8 +106,8 @@ const TransactionRoutes = new Elysia({
 
 			await Redis.setex(
 				`transactions:${user.id}`,
-				JSON.stringify(transactions),
 				60 * 30,
+				JSON.stringify(transactions),
 			);
 
 			set.status = 200;
@@ -78,27 +119,89 @@ const TransactionRoutes = new Elysia({
 		}
 	})
 	.put(
-		"/:TransactionId",
-		async ({ set, body, user, params: { TransactionId } }) => {
+		"/:transactionId",
+		async ({ set, body, user, params: { transactionId } }) => {
 			if (!user) {
 				set.status = 401;
 				return { message: "Unauthorized" };
 			}
 
-			try {
-				const updatedTransaction = await TransactionModel.findOneAndUpdate(
-					{ _id: TransactionId, userId: user.id },
-					{
-						...body,
-					},
-					{ new: true },
-				);
+			const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+			if (!objectIdRegex.test(transactionId)) {
+				set.status = 400;
+				return { message: "Invalid transaction id" };
+			}
 
+			try {
+				const { amount, category, type, description, date } = body;
+
+				const updatedTransaction = await TransactionModel.findOneAndUpdate(
+					{ _id: transactionId, userId: user.id },
+					{
+						amount,
+						category,
+						description,
+						type,
+						date,
+					},
+					{ new: false },
+				);
 				if (!updatedTransaction) {
 					set.status = 404;
 					return { message: "Transaction not found" };
 				}
 
+				if (updatedTransaction.type === "expense") {
+					// Return the budget limit back to the original amount
+					await BudgetModel.findOneAndUpdate(
+						{
+							userId: user.id,
+							category: updatedTransaction.category,
+							month: new Date(updatedTransaction.date).getMonth() + 1,
+							year: new Date(updatedTransaction.date).getFullYear(),
+						},
+						{
+							$inc: { limit: updatedTransaction.amount },
+						},
+					);
+				}
+
+				if (type === "expense") {
+					// Deduct the budget limit from the new amount
+					const currentBudget = await BudgetModel.findOne({
+						userId: user.id,
+						category,
+						month: new Date(date).getMonth() + 1,
+						year: new Date(date).getFullYear(),
+					});
+
+					if (!currentBudget) {
+						set.status = 404;
+						return {
+							message: "Please create a budget for this category first",
+						};
+					}
+
+					if (currentBudget.limit < amount) {
+						set.status = 400;
+						return {
+							message: "You don't have enough budget for this transaction",
+						};
+					}
+
+					await BudgetModel.findOneAndUpdate(
+						{
+							userId: user.id,
+							category,
+							month: new Date(date).getMonth() + 1,
+							year: new Date(date).getFullYear(),
+						},
+						{ $inc: { limit: -amount } },
+						{ new: true },
+					);
+				}
+
+				await Redis.del(`budgets:${user.id}`);
 				await Redis.del(`transactions:${user.id}`);
 
 				set.status = 200;
@@ -117,16 +220,22 @@ const TransactionRoutes = new Elysia({
 		{ body: TransactionsTypes },
 	)
 	.delete(
-		"/:TransactionId",
-		async ({ set, user, params: { TransactionId } }) => {
+		"/:transactionId",
+		async ({ set, user, params: { transactionId } }) => {
 			if (!user) {
 				set.status = 401;
 				return { message: "Unauthorized" };
 			}
 
+			const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+			if (!objectIdRegex.test(transactionId)) {
+				set.status = 400;
+				return { message: "Invalid transaction id" };
+			}
+
 			try {
 				const TransactionIdExist = await TransactionModel.findOneAndDelete({
-					_id: TransactionId,
+					_id: transactionId,
 					userId: user.id,
 				});
 
@@ -135,7 +244,22 @@ const TransactionRoutes = new Elysia({
 					return { message: "Transaction not found" };
 				}
 
+				if (TransactionIdExist.type === "expense") {
+					await BudgetModel.findOneAndUpdate(
+						{
+							userId: user.id,
+							category: TransactionIdExist.category,
+							month: new Date(TransactionIdExist.date).getMonth() + 1,
+							year: new Date(TransactionIdExist.date).getFullYear(),
+						},
+						{
+							$inc: { limit: TransactionIdExist.amount },
+						},
+					);
+				}
+
 				await Redis.del(`transactions:${user.id}`);
+				await Redis.del(`budgets:${user.id}`);
 
 				set.status = 200;
 				return { message: "Transaction deleted" };

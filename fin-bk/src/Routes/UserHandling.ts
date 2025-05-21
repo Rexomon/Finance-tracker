@@ -70,8 +70,8 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 
 				await Redis.setex(
 					`RefreshToken:${user.id}`,
-					UserRefreshToken,
 					refreshTokenExpiry,
+					UserRefreshToken,
 				);
 				set.status = 200;
 				return { message: "Login success" };
@@ -197,8 +197,8 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 
 				await Redis.setex(
 					`RefreshToken:${user.id}`,
-					UserRefreshToken,
 					refreshTokenExpiry,
+					UserRefreshToken,
 				);
 
 				set.status = 200;

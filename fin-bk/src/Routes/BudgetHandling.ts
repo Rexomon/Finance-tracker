@@ -42,6 +42,7 @@ const BudgetRoutes = new Elysia({
 					year,
 				};
 				await BudgetModel.create(budgetData);
+				await Redis.del(`budgets:${user.id}`);
 
 				set.status = 201;
 				return { message: "Budget created successfully" };
@@ -89,35 +90,42 @@ const BudgetRoutes = new Elysia({
 			return { message: "An internal server error occurred" };
 		}
 	})
-	.delete(
-		"/:TransactionId",
-		async ({ set, user, params: { TransactionId } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
+	.delete("/:budgetId", async ({ set, user, params: { budgetId } }) => {
+		if (!user) {
+			set.status = 401;
+			return { message: "Unauthorized" };
+		}
+
+		const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+		if (!objectIdRegex.test(budgetId)) {
+			set.status = 400;
+			return { message: "Invalid budget id" };
+		}
+
+		try {
+			const budget = await BudgetModel.findOneAndDelete({
+				_id: budgetId,
+				userId: user.id,
+			});
+
+			if (!budget) {
+				set.status = 404;
+				return { message: "Budget not found" };
 			}
 
-			try {
-				const budget = await BudgetModel.findOneAndDelete({
-					_id: TransactionId,
-					userId: user.id,
-				});
+			await Redis.del(`budgets:${user.id}`);
 
-				if (!budget) {
-					set.status = 404;
-					return { message: "Budget not found" };
-				}
-
-				await Redis.del(`budgets:${user.id}`);
-
-				set.status = 200;
-				return { message: "Budget deleted successfully" };
-			} catch (error) {
-				set.status = 500;
-				console.error(error);
-				return { message: "An internal server error occurred" };
+			set.status = 200;
+			return { message: "Budget deleted successfully" };
+		} catch (error) {
+			if (error instanceof Error && error.name === "CastError") {
+				set.status = 400;
+				return { message: "Invalid budget id" };
 			}
-		},
-	);
+			set.status = 500;
+			console.error(error);
+			return { message: "An internal server error occurred" };
+		}
+	});
 
 export default BudgetRoutes;
