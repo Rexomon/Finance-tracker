@@ -13,14 +13,15 @@ const TransactionSchema = new mongoose.Schema(
 			required: true,
 		},
 
-    category: {
-      type: String,
-    },
+		category: {
+			type: String,
+      required: false,
+		},
 
 		type: {
 			type: String,
 			required: true,
-      enum: ["income", "expense"],
+			enum: ["income", "expense"],
 		},
 
 		description: {
@@ -37,6 +38,9 @@ const TransactionSchema = new mongoose.Schema(
 		timestamps: true,
 	},
 );
+
+
+TransactionSchema.index({ userId: 1, category: 1, date: 1 });
 
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
 export default TransactionModel;

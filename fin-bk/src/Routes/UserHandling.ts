@@ -8,6 +8,8 @@ import { UserLoginTypes, UserRegisterTypes } from "../Types/UserTypes";
 const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 	.use(JwtAccessToken())
 	.use(JwtRefreshToken())
+
+  // Login route by email and password
 	.post(
 		"/login",
 		async ({
@@ -83,6 +85,8 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		},
 		{ body: UserLoginTypes },
 	)
+
+  // Register a new user
 	.post(
 		"/register",
 		async ({ set, body }) => {
@@ -128,6 +132,8 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		},
 		{ body: UserRegisterTypes },
 	)
+
+  // Refresh token route for authenticated users
 	.post(
 		"/refresh",
 		async ({
@@ -210,7 +216,10 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 			}
 		},
 	)
+
 	.use(Auth)
+  // ==Authenticated routes==
+  // Logout authenticated user
 	.post(
 		"/logout",
 		async ({ set, user, cookie: { AccessToken, RefreshToken } }) => {
@@ -228,6 +237,8 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 			return { message: "Logout success" };
 		},
 	)
+
+  // Get authenticated user
 	.get("/profile", async ({ set, user }) => {
 		if (!user) {
 			set.status = 401;

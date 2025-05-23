@@ -10,6 +10,8 @@ const TransactionRoutes = new Elysia({
 	detail: { tags: ["Transaction"] },
 })
 	.use(Auth)
+  // ==Authenticated routes==
+  // Create a new transaction
 	.post(
 		"/",
 		async ({ set, body, user }) => {
@@ -83,6 +85,8 @@ const TransactionRoutes = new Elysia({
 		},
 		{ body: TransactionsTypes },
 	)
+
+  // Get all transactions for a user
 	.get("/", async ({ set, user }) => {
 		if (!user) {
 			set.status = 401;
@@ -118,6 +122,8 @@ const TransactionRoutes = new Elysia({
 			return { message: "An internal server error occurred" };
 		}
 	})
+
+  // Update a transaction by ID
 	.put(
 		"/:transactionId",
 		async ({ set, body, user, params: { transactionId } }) => {
@@ -219,6 +225,8 @@ const TransactionRoutes = new Elysia({
 		},
 		{ body: TransactionsTypes },
 	)
+
+  // Delete a transaction by ID
 	.delete(
 		"/:transactionId",
 		async ({ set, user, params: { transactionId } }) => {
@@ -234,26 +242,26 @@ const TransactionRoutes = new Elysia({
 			}
 
 			try {
-				const TransactionIdExist = await TransactionModel.findOneAndDelete({
+				const deleteTransaction = await TransactionModel.findOneAndDelete({
 					_id: transactionId,
 					userId: user.id,
 				});
 
-				if (!TransactionIdExist) {
+				if (!deleteTransaction) {
 					set.status = 404;
 					return { message: "Transaction not found" };
 				}
 
-				if (TransactionIdExist.type === "expense") {
+				if (deleteTransaction.type === "expense") {
 					await BudgetModel.findOneAndUpdate(
 						{
 							userId: user.id,
-							category: TransactionIdExist.category,
-							month: new Date(TransactionIdExist.date).getMonth() + 1,
-							year: new Date(TransactionIdExist.date).getFullYear(),
+							category: deleteTransaction.category,
+							month: new Date(deleteTransaction.date).getMonth() + 1,
+							year: new Date(deleteTransaction.date).getFullYear(),
 						},
 						{
-							$inc: { limit: TransactionIdExist.amount },
+							$inc: { limit: deleteTransaction.amount },
 						},
 					);
 				}

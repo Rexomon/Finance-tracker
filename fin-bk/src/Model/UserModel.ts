@@ -4,13 +4,11 @@ const UserSchema = new mongoose.Schema(
 	{
 		name: {
 			type: String,
-			unique: true,
 			required: true,
 		},
 
 		email: {
 			type: String,
-			unique: true,
 			required: true,
 		},
 
@@ -23,6 +21,9 @@ const UserSchema = new mongoose.Schema(
 		timestamps: true,
 	},
 );
+
+UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ name: 1 }, { unique: true });
 
 const UserModel = mongoose.model("User", UserSchema);
 export default UserModel;
