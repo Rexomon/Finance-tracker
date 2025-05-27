@@ -5,12 +5,25 @@ import UserRoutes from "./Routes/UserHandling";
 import BudgetRoutes from "./Routes/BudgetHandling";
 import TransactionRoutes from "./Routes/TransactionHandling";
 import connectToDatabase from "./Database/DatabaseConnection";
+import { safelyCloseRedis } from "./Config/Redis";
+import { safelyCloseMongoDB } from "./Database/DatabaseConnection";
 
 await connectToDatabase();
 
+// Ensure environment variables are set
+const port = Number(Bun.env.PORT);
+const nodeEnv = Bun.env.NODE_ENV;
+const corsDomainOrigin = Bun.env.DOMAIN_ORIGIN;
+
+if (nodeEnv === "production" && !corsDomainOrigin) {
+	console.error("CORS domain origin is not set");
+	process.exit(1);
+}
+
+// Elysia server initialization
 const app = new Elysia();
 
-if (Bun.env.NODE_ENV !== "production") {
+if (nodeEnv !== "production") {
 	app.use(
 		swagger({
 			documentation: {
@@ -32,7 +45,7 @@ if (Bun.env.NODE_ENV !== "production") {
 app
 	.use(
 		cors({
-			origin: Bun.env.DOMAIN_ORIGIN,
+			origin: corsDomainOrigin || "*",
 			credentials: true,
 			methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 			allowedHeaders: ["Content-Type"],
@@ -46,8 +59,38 @@ app
 	.use(UserRoutes)
 	.use(TransactionRoutes)
 	.use(BudgetRoutes)
-	.listen(Bun.env.PORT || 3000);
+	.listen(port);
 
 console.log(
 	`🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`,
 );
+
+// Safely shutdown the server and close connections
+let isShuttingDown = false;
+
+const shutdownService = async (signal: string) => {
+  if (isShuttingDown) return;
+
+	isShuttingDown = true;
+
+	console.log(`Received ${signal}, shutting down gracefully...`);
+	try {
+    await Promise.all([
+      safelyCloseRedis(),
+			safelyCloseMongoDB(),
+			app.server?.stop(true),
+		]);
+    console.log("Elysia server stopped safely");
+		process.exit(0);
+	} catch (error) {
+		console.error("Error during shutdown:", error);
+		process.exit(1);
+	}
+};
+
+const closeSignals = ["SIGINT", "SIGTERM", "SIGQUIT"];
+for (const SignalType of closeSignals) {
+	process.on(SignalType, async () => {
+		shutdownService(SignalType);
+	});
+}

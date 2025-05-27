@@ -9,16 +9,25 @@ const connectToDatabase = async () => {
 	}
 
 	try {
-		const terkoneksi = await mongoose.connect(dbConnectString);
+		const mongooseConnection = await mongoose.connect(dbConnectString);
     console.log(
         "🟢 Database connected successfully | 🌐 Host: %s | 📚 DB: %s",
-        terkoneksi.connection.host,
-        terkoneksi.connection.name,
+        mongooseConnection.connection.host,
+        mongooseConnection.connection.name,
     );
 	} catch (error) {
 		console.error("Database connection error:", error);
 		process.exit(1);
 	}
+};
+
+export const safelyCloseMongoDB = async () => {
+  try {
+    await mongoose.connection.close();
+    console.log("MongoDB connection closed safely.");
+  } catch (error) {
+    console.error("Error closing MongoDB connection:", error);
+  }
 };
 
 export default connectToDatabase;
