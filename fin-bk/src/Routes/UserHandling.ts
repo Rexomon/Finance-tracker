@@ -9,7 +9,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 	.use(JwtAccessToken())
 	.use(JwtRefreshToken())
 
-  // Login route by email and password
+	// Login route by email and password
 	.post(
 		"/login",
 		async ({
@@ -86,7 +86,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		{ body: UserLoginTypes },
 	)
 
-  // Register a new user
+	// Register a new user
 	.post(
 		"/register",
 		async ({ set, body }) => {
@@ -133,7 +133,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		{ body: UserRegisterTypes },
 	)
 
-  // Refresh token route for authenticated users
+	// Refresh token route for authenticated users
 	.post(
 		"/refresh",
 		async ({
@@ -212,14 +212,14 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 			} catch (error) {
 				set.status = 500;
 				console.error(error);
-        return { message: "An internal server error occurred" };
+				return { message: "An internal server error occurred" };
 			}
 		},
 	)
 
 	.use(Auth)
-  // ==Authenticated routes==
-  // Logout authenticated user
+	// ==Authenticated routes==
+	// Logout authenticated user
 	.post(
 		"/logout",
 		async ({ set, user, cookie: { AccessToken, RefreshToken } }) => {
@@ -238,7 +238,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		},
 	)
 
-  // Get authenticated user
+	// Get authenticated user
 	.get("/profile", async ({ set, user }) => {
 		if (!user) {
 			set.status = 401;

@@ -10,4 +10,3 @@ export const UserLoginTypes = t.Object({
 	email: t.String({ format: "email", error: "Invalid email" }),
 	password: t.String(),
 });
-

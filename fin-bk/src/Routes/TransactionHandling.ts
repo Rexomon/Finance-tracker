@@ -10,8 +10,8 @@ const TransactionRoutes = new Elysia({
 	detail: { tags: ["Transaction"] },
 })
 	.use(Auth)
-  // ==Authenticated routes==
-  // Create a new transaction
+	// ==Authenticated routes==
+	// Create a new transaction
 	.post(
 		"/",
 		async ({ set, body, user }) => {
@@ -86,7 +86,7 @@ const TransactionRoutes = new Elysia({
 		{ body: TransactionsTypes },
 	)
 
-  // Get all transactions for a user
+	// Get all transactions for a user
 	.get("/", async ({ set, user }) => {
 		if (!user) {
 			set.status = 401;
@@ -123,7 +123,7 @@ const TransactionRoutes = new Elysia({
 		}
 	})
 
-  // Update a transaction by ID
+	// Update a transaction by ID
 	.put(
 		"/:transactionId",
 		async ({ set, body, user, params: { transactionId } }) => {
@@ -226,7 +226,7 @@ const TransactionRoutes = new Elysia({
 		{ body: TransactionsTypes },
 	)
 
-  // Delete a transaction by ID
+	// Delete a transaction by ID
 	.delete(
 		"/:transactionId",
 		async ({ set, user, params: { transactionId } }) => {

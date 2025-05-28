@@ -69,18 +69,18 @@ console.log(
 let isShuttingDown = false;
 
 const shutdownService = async (signal: string) => {
-  if (isShuttingDown) return;
+	if (isShuttingDown) return;
 
 	isShuttingDown = true;
 
 	console.log(`Received ${signal}, shutting down gracefully...`);
 	try {
-    await Promise.all([
-      safelyCloseRedis(),
+		await Promise.all([
+			safelyCloseRedis(),
 			safelyCloseMongoDB(),
 			app.server?.stop(true),
 		]);
-    console.log("Elysia server stopped safely");
+		console.log("Elysia server stopped safely");
 		process.exit(0);
 	} catch (error) {
 		console.error("Error during shutdown:", error);

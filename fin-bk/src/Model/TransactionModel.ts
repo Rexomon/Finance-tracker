@@ -15,7 +15,7 @@ const TransactionSchema = new mongoose.Schema(
 
 		category: {
 			type: String,
-      required: false,
+			required: false,
 		},
 
 		type: {
@@ -38,7 +38,6 @@ const TransactionSchema = new mongoose.Schema(
 		timestamps: true,
 	},
 );
-
 
 TransactionSchema.index({ userId: 1, category: 1, date: 1 });
 

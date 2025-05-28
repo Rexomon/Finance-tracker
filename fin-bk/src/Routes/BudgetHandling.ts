@@ -9,8 +9,8 @@ const BudgetRoutes = new Elysia({
 	detail: { tags: ["Budget"] },
 })
 	.use(Auth)
-  // ==Authenticated routes==
-  // Create a new budget
+	// ==Authenticated routes==
+	// Create a new budget
 	.post(
 		"/",
 		async ({ set, user, body }) => {
@@ -57,7 +57,7 @@ const BudgetRoutes = new Elysia({
 		{ body: BudgetTypes },
 	)
 
-  // Get all budgets for a user
+	// Get all budgets for a user
 	.get("/", async ({ set, user }) => {
 		if (!user) {
 			set.status = 401;
@@ -95,7 +95,7 @@ const BudgetRoutes = new Elysia({
 		}
 	})
 
-  // Delete a budget by ID
+	// Delete a budget by ID
 	.delete("/:budgetId", async ({ set, user, params: { budgetId } }) => {
 		if (!user) {
 			set.status = 401;
