@@ -20,11 +20,11 @@ if (nodeEnv === "production" && !corsDomainOrigin) {
 	process.exit(1);
 }
 
-// Elysia server initialization
-const app = new Elysia();
+// Elysia server initialization and configuration
+const mainApp = new Elysia();
 
 if (nodeEnv !== "production") {
-	app.use(
+	mainApp.use(
 		swagger({
 			documentation: {
 				info: {
@@ -38,11 +38,18 @@ if (nodeEnv !== "production") {
 					{ name: "Budget", description: "Budget related endpoints" },
 				],
 			},
+			path: "/swagger",
+			scalarConfig: {
+				darkMode: true,
+				theme: "deepSpace",
+			},
 		}),
 	);
 }
 
-app
+const apiApp = new Elysia({ prefix: "/v1" });
+
+apiApp
 	.use(
 		cors({
 			origin: corsDomainOrigin || "*",
@@ -58,8 +65,10 @@ app
 	})
 	.use(UserRoutes)
 	.use(TransactionRoutes)
-	.use(BudgetRoutes)
-	.listen(port);
+	.use(BudgetRoutes);
+
+// Server setup
+const app = mainApp.use(apiApp).listen(port);
 
 console.log(
 	`🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`,
@@ -78,7 +87,7 @@ const shutdownService = async (signal: string) => {
 		await Promise.all([
 			safelyCloseRedis(),
 			safelyCloseMongoDB(),
-			app.server?.stop(true),
+			mainApp.server?.stop(true),
 		]);
 		console.log("Elysia server stopped safely");
 		process.exit(0);

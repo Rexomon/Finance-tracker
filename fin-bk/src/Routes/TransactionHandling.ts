@@ -1,9 +1,9 @@
 import { Elysia } from "elysia";
 import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
+import BudgetModel from "../Model/BudgetModel";
 import TransactionModel from "../Model/TransactionModel";
 import TransactionsTypes from "../Types/TransactionsTypes";
-import BudgetModel from "../Model/BudgetModel";
 
 const TransactionRoutes = new Elysia({
 	prefix: "/transactions",
