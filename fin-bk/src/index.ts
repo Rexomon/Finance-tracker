@@ -39,10 +39,6 @@ if (nodeEnv !== "production") {
 				],
 			},
 			path: "/swagger",
-			scalarConfig: {
-				darkMode: true,
-				theme: "deepSpace",
-			},
 		}),
 	);
 }
@@ -93,7 +89,6 @@ const shutdownService = async (signal: string) => {
 		process.exit(0);
 	} catch (error) {
 		console.error("Error during shutdown:", error);
-		process.exit(1);
 	}
 };
 
