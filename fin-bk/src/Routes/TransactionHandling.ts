@@ -32,13 +32,14 @@ const TransactionRoutes = new Elysia({
 					date,
 				};
 
+				// Deduct budget limit if the transaction is an expense
 				if (type === "expense") {
 					const month = new Date(date).getMonth() + 1;
 					const year = new Date(date).getFullYear();
 
 					const isBudgetExist = await BudgetModel.findOne({
 						userId: user.id,
-						category,
+						category: category,
 						month: month,
 						year: year,
 					});
@@ -53,7 +54,7 @@ const TransactionRoutes = new Elysia({
 					const newBudgetLimit = await BudgetModel.findOneAndUpdate(
 						{
 							userId: user.id,
-							category,
+							category: category,
 							month: month,
 							year: year,
 							limit: { $gte: amount },
@@ -157,8 +158,8 @@ const TransactionRoutes = new Elysia({
 					return { message: "Transaction not found" };
 				}
 
+				// Return the budget limit back to the original amount
 				if (updatedTransaction.type === "expense") {
-					// Return the budget limit back to the original amount
 					await BudgetModel.findOneAndUpdate(
 						{
 							userId: user.id,

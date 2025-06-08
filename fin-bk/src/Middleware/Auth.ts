@@ -30,12 +30,17 @@ const Auth = (app: Elysia) =>
 						return { message: "User not found" };
 					}
 
-					const RedisAccessToken = await Redis.get(
+					// Single session sign in check
+					const RedisRefreshToken = await Redis.get(
 						`RefreshToken:${decoded.id}`,
 					);
-					if (RefreshToken.value !== RedisAccessToken) {
+					if (!RedisRefreshToken) {
 						set.status = 401;
-						return { message: "Unauthorized" };
+						return { message: "Session expired" };
+					}
+					if (RefreshToken.value !== RedisRefreshToken) {
+						set.status = 401;
+						return { message: "Session invalid" };
 					}
 
 					const user = decoded;

@@ -75,6 +75,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					refreshTokenExpiry,
 					UserRefreshToken,
 				);
+
 				set.status = 200;
 				return { message: "Login success" };
 			} catch (error) {
@@ -92,12 +93,6 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		async ({ set, body }) => {
 			try {
 				const { name, email, password } = body;
-
-				const NameRegex = /^[a-zA-Z0-9]+$/;
-				if (!name.match(NameRegex)) {
-					set.status = 400;
-					return { message: "Name can only contain letters and numbers" };
-				}
 
 				const isNameExist = await UserModel.findOne({ name: name });
 				if (isNameExist) {
