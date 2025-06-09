@@ -37,14 +37,14 @@ const TransactionRoutes = new Elysia({
 					const month = new Date(date).getMonth() + 1;
 					const year = new Date(date).getFullYear();
 
-					const isBudgetExist = await BudgetModel.findOne({
+					const existingBudget = await BudgetModel.findOne({
 						userId: user.id,
 						category: category,
 						month: month,
 						year: year,
 					});
 
-					if (!isBudgetExist) {
+					if (!existingBudget) {
 						set.status = 404;
 						return {
 							message: "Please create a budget for this category first",
@@ -95,11 +95,10 @@ const TransactionRoutes = new Elysia({
 		}
 
 		try {
-			const cacheTransactions = await Redis.get(`transactions:${user.id}`);
-
-			if (cacheTransactions) {
+			const cachedTransactions = await Redis.get(`transactions:${user.id}`);
+			if (cachedTransactions) {
 				set.status = 200;
-				return { transactions: JSON.parse(cacheTransactions) };
+				return { transactions: JSON.parse(cachedTransactions) };
 			}
 
 			const transactions = await TransactionModel.find(
@@ -107,7 +106,9 @@ const TransactionRoutes = new Elysia({
 					userId: user.id,
 				},
 				{ userId: 0, __v: 0 },
-			).sort({ date: -1 });
+			)
+				.sort({ date: -1 })
+				.populate("category", { userId: 0, __v: 0 });
 
 			await Redis.setex(
 				`transactions:${user.id}`,
@@ -145,11 +146,11 @@ const TransactionRoutes = new Elysia({
 				const updatedTransaction = await TransactionModel.findOneAndUpdate(
 					{ _id: transactionId, userId: user.id },
 					{
-						amount,
-						category,
-						description,
-						type,
-						date,
+						amount: amount,
+						category: category,
+						description: description,
+						type: type,
+						date: date,
 					},
 					{ new: false },
 				);
@@ -173,23 +174,23 @@ const TransactionRoutes = new Elysia({
 					);
 				}
 
+				// Deduct the budget limit from the new amount
 				if (type === "expense") {
-					// Deduct the budget limit from the new amount
-					const currentBudget = await BudgetModel.findOne({
+					const existingBudgetForUpdate = await BudgetModel.findOne({
 						userId: user.id,
 						category,
 						month: new Date(date).getMonth() + 1,
 						year: new Date(date).getFullYear(),
 					});
 
-					if (!currentBudget) {
+					if (!existingBudgetForUpdate) {
 						set.status = 404;
 						return {
 							message: "Please create a budget for this category first",
 						};
 					}
 
-					if (currentBudget.limit < amount) {
+					if (existingBudgetForUpdate.limit < amount) {
 						set.status = 400;
 						return {
 							message: "You don't have enough budget for this transaction",
@@ -243,26 +244,26 @@ const TransactionRoutes = new Elysia({
 			}
 
 			try {
-				const deleteTransaction = await TransactionModel.findOneAndDelete({
+				const deletedTransaction = await TransactionModel.findOneAndDelete({
 					_id: transactionId,
 					userId: user.id,
 				});
 
-				if (!deleteTransaction) {
+				if (!deletedTransaction) {
 					set.status = 404;
 					return { message: "Transaction not found" };
 				}
 
-				if (deleteTransaction.type === "expense") {
+				if (deletedTransaction.type === "expense") {
 					await BudgetModel.findOneAndUpdate(
 						{
 							userId: user.id,
-							category: deleteTransaction.category,
-							month: new Date(deleteTransaction.date).getMonth() + 1,
-							year: new Date(deleteTransaction.date).getFullYear(),
+							category: deletedTransaction.category,
+							month: new Date(deletedTransaction.date).getMonth() + 1,
+							year: new Date(deletedTransaction.date).getFullYear(),
 						},
 						{
-							$inc: { limit: deleteTransaction.amount },
+							$inc: { limit: deletedTransaction.amount },
 						},
 					);
 				}

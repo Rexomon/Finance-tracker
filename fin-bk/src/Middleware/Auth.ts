@@ -24,8 +24,8 @@ const Auth = (app: Elysia) =>
 						return { message: "Unauthorized" };
 					}
 
-					const isUserExist = await UserModel.findOne({ _id: decoded.id });
-					if (!isUserExist) {
+					const existingUser = await UserModel.findOne({ _id: decoded.id });
+					if (!existingUser) {
 						set.status = 404;
 						return { message: "User not found" };
 					}

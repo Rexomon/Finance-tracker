@@ -8,14 +8,15 @@ const TransactionSchema = new mongoose.Schema(
 			required: true,
 		},
 
-		amount: {
-			type: Number,
+		category: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "Category",
 			required: true,
 		},
 
-		category: {
-			type: String,
-			required: false,
+		amount: {
+			type: Number,
+			required: true,
 		},
 
 		type: {

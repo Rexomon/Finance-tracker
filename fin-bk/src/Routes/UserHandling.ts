@@ -94,15 +94,15 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 			try {
 				const { name, email, password } = body;
 
-				const isNameExist = await UserModel.findOne({ name: name });
-				if (isNameExist) {
-					set.status = 400;
+				const existingUserByName = await UserModel.findOne({ name: name });
+				if (existingUserByName) {
+					set.status = 409;
 					return { message: "Name already exists" };
 				}
 
-				const isEmailExist = await UserModel.findOne({ email: email });
-				if (isEmailExist) {
-					set.status = 400;
+				const existingUserByEmail = await UserModel.findOne({ email: email });
+				if (existingUserByEmail) {
+					set.status = 409;
 					return { message: "Email already exists" };
 				}
 

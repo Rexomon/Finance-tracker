@@ -2,13 +2,15 @@ import { t } from "elysia";
 
 const TransactionsTypes = t.Object({
 	amount: t.Number({ error: "Invalid amount" }),
-	category: t.Optional(t.String()),
+	category: t.String({
+		pattern: "^[0-9a-fA-F]{24}$",
+		error: "Invalid category id",
+	}),
 	date: t.Date({ error: "Invalid date" }),
 	description: t.String(),
-	type: t.Enum(
-		{ income: "income", expense: "expense" },
-		{ error: "Invalid type" },
-	),
+	type: t.Union([t.Literal("income"), t.Literal("expense")], {
+		error: "Invalid transaction type",
+	}),
 });
 
 export default TransactionsTypes;

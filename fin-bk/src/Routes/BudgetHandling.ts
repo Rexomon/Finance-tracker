@@ -43,6 +43,7 @@ const BudgetRoutes = new Elysia({
 					month,
 					year,
 				};
+
 				await BudgetModel.create(budgetData);
 				await Redis.del(`budgets:${user.id}`);
 
@@ -65,11 +66,10 @@ const BudgetRoutes = new Elysia({
 		}
 
 		try {
-			const cacheBudgets = await Redis.get(`budgets:${user.id}`);
-
-			if (cacheBudgets) {
+			const cachedBudgets = await Redis.get(`budgets:${user.id}`);
+			if (cachedBudgets) {
 				set.status = 200;
-				return { budgets: JSON.parse(cacheBudgets) };
+				return { budgets: JSON.parse(cachedBudgets) };
 			}
 
 			const budgets = await BudgetModel.find(
@@ -78,7 +78,9 @@ const BudgetRoutes = new Elysia({
 					userId: 0,
 					__v: 0,
 				},
-			).sort({ month: -1 });
+			)
+				.sort({ month: -1 })
+				.populate("category", { userId: 0, __v: 0 });
 
 			await Redis.setex(
 				`budgets:${user.id}`,

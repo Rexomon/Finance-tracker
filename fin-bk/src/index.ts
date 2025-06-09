@@ -3,6 +3,7 @@ import cors from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
 import UserRoutes from "./Routes/UserHandling";
 import BudgetRoutes from "./Routes/BudgetHandling";
+import CategoryRoutes from "./Routes/CategoryHandling";
 import TransactionRoutes from "./Routes/TransactionHandling";
 import connectToDatabase from "./Database/DatabaseConnection";
 import { safelyCloseRedis } from "./Config/Redis";
@@ -36,6 +37,7 @@ if (nodeEnv !== "production") {
 					{ name: "User", description: "User related endpoints" },
 					{ name: "Transaction", description: "Transaction related endpoints" },
 					{ name: "Budget", description: "Budget related endpoints" },
+					{ name: "Category", description: "Category related endpoints" },
 				],
 			},
 			path: "/swagger",
@@ -60,8 +62,9 @@ apiApp
 		return { message: "Hello, There!" };
 	})
 	.use(UserRoutes)
+	.use(BudgetRoutes)
+	.use(CategoryRoutes)
 	.use(TransactionRoutes)
-	.use(BudgetRoutes);
 
 // Server setup
 const app = mainApp.use(apiApp).listen(port);
