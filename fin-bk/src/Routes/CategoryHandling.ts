@@ -1,7 +1,9 @@
 import { Elysia } from "elysia";
 import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
+import BudgetModel from "../Model/BudgetModel";
 import CategoryModel from "../Model/CategoryModel";
+import TransactionModel from "../Model/TransactionModel";
 import { CategoryQueryTypes, CategoryTypes } from "../Types/CategoryTypes";
 
 const CategoryHandling = new Elysia({
@@ -79,7 +81,7 @@ const CategoryHandling = new Elysia({
 				const userCategoriesList = await CategoryModel.find(userQueryDetails, {
 					userId: 0,
 					__v: 0,
-				}).sort({ categoryName: 1 });
+				}).sort({ type: 1 });
 
 				await Redis.setex(
 					cacheKey,
@@ -111,6 +113,29 @@ const CategoryHandling = new Elysia({
 		}
 
 		try {
+			const transactionUsingCategory = await TransactionModel.findOne({
+				userId: user.id,
+				category: categoryId,
+			});
+			if (transactionUsingCategory) {
+				set.status = 400;
+				return {
+					message:
+						"Category cannot be deleted as it is being used in transactions",
+				};
+			}
+
+			const budgetUsingCategory = await BudgetModel.findOne({
+				userId: user.id,
+				category: categoryId,
+			});
+			if (budgetUsingCategory) {
+				set.status = 400;
+				return {
+					message: "Category cannot be deleted as it is being used in budgets",
+				};
+			}
+
 			const deleteCategory = await CategoryModel.findOneAndDelete({
 				userId: user.id,
 				_id: categoryId,

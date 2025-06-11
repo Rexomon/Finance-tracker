@@ -7,7 +7,7 @@ const TransactionsTypes = t.Object({
 		error: "Invalid category id",
 	}),
 	date: t.Date({ error: "Invalid date" }),
-	description: t.String(),
+	description: t.String({ error: "Invalid description" }),
 	type: t.Union([t.Literal("income"), t.Literal("expense")], {
 		error: "Invalid transaction type",
 	}),

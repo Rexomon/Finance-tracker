@@ -64,7 +64,7 @@ apiApp
 	.use(UserRoutes)
 	.use(BudgetRoutes)
 	.use(CategoryRoutes)
-	.use(TransactionRoutes)
+	.use(TransactionRoutes);
 
 // Server setup
 const app = mainApp.use(apiApp).listen(port);

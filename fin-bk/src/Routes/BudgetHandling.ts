@@ -80,13 +80,14 @@ const BudgetRoutes = new Elysia({
 				},
 			)
 				.sort({ month: -1 })
-				.populate("category", { userId: 0, __v: 0 });
+				.populate("category", {
+					userId: 0,
+					createdAt: 0,
+					updatedAt: 0,
+					__v: 0,
+				});
 
-			await Redis.setex(
-				`budgets:${user.id}`,
-				60 * 60 * 24,
-				JSON.stringify(budgets),
-			);
+			await Redis.setex(`budgets:${user.id}`, 60 * 30, JSON.stringify(budgets));
 
 			set.status = 200;
 			return { budgets };

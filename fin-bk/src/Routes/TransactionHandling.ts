@@ -108,7 +108,12 @@ const TransactionRoutes = new Elysia({
 				{ userId: 0, __v: 0 },
 			)
 				.sort({ date: -1 })
-				.populate("category", { userId: 0, __v: 0 });
+				.populate("category", {
+					userId: 0,
+					createdAt: 0,
+					updatedAt: 0,
+					__v: 0,
+				});
 
 			await Redis.setex(
 				`transactions:${user.id}`,
