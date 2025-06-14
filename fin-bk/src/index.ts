@@ -86,7 +86,7 @@ const shutdownService = async (signal: string) => {
 		await Promise.all([
 			safelyCloseRedis(),
 			safelyCloseMongoDB(),
-			mainApp.server?.stop(true),
+			app.stop(),
 		]);
 		console.log("Elysia server stopped safely");
 		process.exit(0);
