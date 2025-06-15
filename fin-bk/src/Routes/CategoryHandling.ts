@@ -140,7 +140,6 @@ const CategoryHandling = new Elysia({
 				userId: user.id,
 				_id: categoryId,
 			});
-
 			if (!deleteCategory) {
 				set.status = 404;
 				return { message: "Category not found" };
@@ -156,6 +155,105 @@ const CategoryHandling = new Elysia({
 			console.error(error);
 			return { message: "An internal server error occurred" };
 		}
-	});
+	})
+
+	// Update a category by ID
+	.patch(
+		"/:categoryId",
+		async ({ set, body, user, params: { categoryId } }) => {
+			if (!user) {
+				set.status = 401;
+				return { message: "Unauthorized" };
+			}
+
+			const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+			if (!objectIdRegex.test(categoryId)) {
+				set.status = 400;
+				return { message: "Invalid category id" };
+			}
+
+			try {
+				const { categoryName, type } = body;
+
+				const existingCategory = await CategoryModel.findOne({
+					userId: user.id,
+					categoryName: categoryName,
+					type: type,
+				});
+				if (existingCategory) {
+					set.status = 409;
+					return { message: "Category already exists" };
+				}
+
+				const currentCategory = await CategoryModel.findOne({
+					userId: user.id,
+					_id: categoryId,
+				});
+				if (!currentCategory) {
+					set.status = 404;
+					return { message: "Category not found" };
+				}
+
+				const transactionUsingCategory = await TransactionModel.findOne({
+					userId: user.id,
+					category: categoryId,
+				});
+				const budgetUsingCategory = await BudgetModel.findOne({
+					userId: user.id,
+					category: categoryId,
+				});
+
+				// If the category is being used in transactions or budgets, we cannot change its type
+				if (
+					(transactionUsingCategory || budgetUsingCategory) &&
+					currentCategory.type !== type
+				) {
+					set.status = 400;
+					return {
+						message:
+							"Category cannot be updated as it is being used in transactions or budgets",
+					};
+				}
+
+				await CategoryModel.updateOne(
+					{
+						userId: user.id,
+						_id: categoryId,
+					},
+					{
+						categoryName: categoryName,
+						type: type,
+					},
+					{
+						new: true,
+					},
+				);
+
+				// If the category is not being used in transactions or budgets, we can safely update it
+				if (!transactionUsingCategory && !budgetUsingCategory) {
+					await Redis.del(`categories:${user.id}`);
+					await Redis.del(`categories:${user.id}:income`);
+					await Redis.del(`categories:${user.id}:expense`);
+
+					set.status = 200;
+					return { message: "Lonely Category updated successfully" };
+				}
+
+				await Redis.del(`budgets:${user.id}`);
+				await Redis.del(`transactions:${user.id}`);
+				await Redis.del(`categories:${user.id}`);
+				await Redis.del(`categories:${user.id}:income`);
+				await Redis.del(`categories:${user.id}:expense`);
+
+				set.status = 200;
+				return { message: "Category updated successfully" };
+			} catch (error) {
+				set.status = 500;
+				console.error(error);
+				return { message: "An internal server error occurred" };
+			}
+		},
+		{ body: CategoryTypes },
+	);
 
 export default CategoryHandling;
