@@ -117,22 +117,15 @@ const CategoryHandling = new Elysia({
 				userId: user.id,
 				category: categoryId,
 			});
-			if (transactionUsingCategory) {
-				set.status = 400;
-				return {
-					message:
-						"Category cannot be deleted as it is being used in transactions",
-				};
-			}
-
 			const budgetUsingCategory = await BudgetModel.findOne({
 				userId: user.id,
 				category: categoryId,
 			});
-			if (budgetUsingCategory) {
+			if (transactionUsingCategory || budgetUsingCategory) {
 				set.status = 400;
 				return {
-					message: "Category cannot be deleted as it is being used in budgets",
+					message:
+						"Category cannot be deleted as it is being used in transactions or budgets",
 				};
 			}
 

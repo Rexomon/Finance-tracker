@@ -3,7 +3,7 @@ import { t } from "elysia";
 export const UserRegisterTypes = t.Object({
 	name: t.String({
 		pattern: "^[a-zA-Z0-9]+$",
-		error: "Name can only contain letters and numbers",
+		error: "Name can only contain letters, numbers and cannot use space",
 	}),
 	email: t.String({ format: "email", error: "Invalid email" }),
 	password: t.String({
@@ -16,5 +16,5 @@ export const UserRegisterTypes = t.Object({
 
 export const UserLoginTypes = t.Object({
 	email: t.String({ format: "email", error: "Invalid email" }),
-	password: t.String(),
+	password: t.String({ error: "Password is required" }),
 });

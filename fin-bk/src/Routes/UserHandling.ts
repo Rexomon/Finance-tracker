@@ -106,7 +106,11 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					return { message: "Email already exists" };
 				}
 
-				const hashPassword = await Bun.password.hash(password);
+				const hashPassword = await Bun.password.hash(password, {
+					algorithm: "argon2id",
+					memoryCost: 21000,
+					timeCost: 2,
+				});
 
 				const newUser = await UserModel.create({
 					name: name,
