@@ -37,12 +37,25 @@ const TransactionRoutes = new Elysia({
 					const month = new Date(date).getMonth() + 1;
 					const year = new Date(date).getFullYear();
 
-					const existingBudget = await BudgetModel.findOne({
-						userId: user.id,
-						category: category,
-						month: month,
-						year: year,
-					});
+					const [existingBudget, newBudgetLimit] = await Promise.all([
+						BudgetModel.findOne({
+							userId: user.id,
+							category: category,
+							month: month,
+							year: year,
+						}),
+						BudgetModel.findOneAndUpdate(
+							{
+								userId: user.id,
+								category: category,
+								month: month,
+								year: year,
+								limit: { $gte: amount },
+							},
+							{ $inc: { limit: -amount } },
+							{ new: true },
+						),
+					]);
 
 					if (!existingBudget) {
 						set.status = 404;
@@ -50,18 +63,6 @@ const TransactionRoutes = new Elysia({
 							message: "Please create a budget for this category first",
 						};
 					}
-
-					const newBudgetLimit = await BudgetModel.findOneAndUpdate(
-						{
-							userId: user.id,
-							category: category,
-							month: month,
-							year: year,
-							limit: { $gte: amount },
-						},
-						{ $inc: { limit: -amount } },
-						{ new: true },
-					);
 
 					if (!newBudgetLimit) {
 						set.status = 400;
@@ -148,71 +149,125 @@ const TransactionRoutes = new Elysia({
 			try {
 				const { amount, category, type, description, date } = body;
 
-				const updatedTransaction = await TransactionModel.findOneAndUpdate(
-					{ _id: transactionId, userId: user.id },
-					{
-						amount: amount,
-						category: category,
-						description: description,
-						type: type,
-						date: date,
-					},
-					{ new: false },
-				);
-				if (!updatedTransaction) {
-					set.status = 404;
-					return { message: "Transaction not found" };
-				}
+				const [existingTransaction, budgetForUpdate] = await Promise.all([
+					TransactionModel.findOne({
+						_id: transactionId,
+						userId: user.id,
+					}),
 
-				// Return the budget limit back to the original amount
-				if (updatedTransaction.type === "expense") {
-					await BudgetModel.findOneAndUpdate(
-						{
-							userId: user.id,
-							category: updatedTransaction.category,
-							month: new Date(updatedTransaction.date).getMonth() + 1,
-							year: new Date(updatedTransaction.date).getFullYear(),
-						},
-						{
-							$inc: { limit: updatedTransaction.amount },
-						},
-					);
-				}
-
-				// Deduct the budget limit from the new amount
-				if (type === "expense") {
-					const existingBudgetForUpdate = await BudgetModel.findOne({
+					// Find the budget based on the incoming category and date [budgetForUpdate]
+					// This is to ensure that the budget is exist before updating the transaction
+					BudgetModel.findOne({
 						userId: user.id,
 						category,
 						month: new Date(date).getMonth() + 1,
 						year: new Date(date).getFullYear(),
-					});
+					}),
+				]);
 
-					if (!existingBudgetForUpdate) {
+				if (!budgetForUpdate) {
+					set.status = 404;
+					return {
+						message: "Please create a budget for this category first",
+					};
+				}
+
+				if (!existingTransaction) {
+					set.status = 404;
+					return { message: "Transaction not found" };
+				}
+
+				const existingBudgetInTransaction = await BudgetModel.findOne({
+					userId: user.id,
+					category: existingTransaction.category,
+					month: new Date(existingTransaction.date).getMonth() + 1,
+					year: new Date(existingTransaction.date).getFullYear(),
+				});
+
+				if (!existingBudgetInTransaction) {
+					set.status = 404;
+					return {
+						message:
+							"This might be an error. Budget not found as it need to be connected to the transaction",
+					};
+				}
+
+				// These logics are to ensure that the budget is enough for the new transaction
+				let isBudgetEnough = false;
+				const isSameCategory = existingBudgetInTransaction._id.equals(
+					budgetForUpdate._id,
+				);
+
+				if (isSameCategory) {
+					const returnedLimit =
+						existingBudgetInTransaction.limit + existingTransaction.amount;
+
+					// If the old budget category is the same as the new budget category,
+					// then we can use the returned budget limit to check if the budget is enough,
+					// for the new transaction
+					if (returnedLimit >= amount) {
+						isBudgetEnough = true;
+					}
+				} else {
+					// If the old budget category is different from the new budget category,
+					// then we need to check if the new budget limit is enough for the new transaction
+					if (budgetForUpdate.limit >= amount) {
+						isBudgetEnough = true;
+					}
+				}
+
+				// Return the budget limit back to the original amount,
+				// if the old transaction type is expense and the budget is enough for the new transaction to be created
+				if (existingTransaction.type === "expense" && isBudgetEnough) {
+					const updatedBudgetLimit = await BudgetModel.findByIdAndUpdate(
+						existingBudgetInTransaction._id,
+						{ $inc: { limit: existingTransaction.amount } },
+						{ new: true },
+					);
+
+					if (!updatedBudgetLimit) {
 						set.status = 404;
 						return {
-							message: "Please create a budget for this category first",
+							message: "Budget not found",
 						};
 					}
+				}
 
-					if (existingBudgetForUpdate.limit < amount) {
-						set.status = 400;
-						return {
-							message: "You don't have enough budget for this transaction",
-						};
-					}
-
-					await BudgetModel.findOneAndUpdate(
+				// Check if the new transaction is an expense and deduct budget limit
+				if (type === "expense") {
+					const deductedBudgetLimit = await BudgetModel.findOneAndUpdate(
 						{
 							userId: user.id,
 							category,
 							month: new Date(date).getMonth() + 1,
 							year: new Date(date).getFullYear(),
+							limit: { $gte: amount },
 						},
 						{ $inc: { limit: -amount } },
 						{ new: true },
 					);
+
+					if (!deductedBudgetLimit) {
+						set.status = 400;
+						return {
+							message: "You don't have enough budget for this transaction",
+						};
+					}
 				}
+
+				const updatedTransaction = {
+					amount,
+					category,
+					type,
+					description,
+					date,
+				};
+
+				await TransactionModel.findOneAndUpdate(
+					{ _id: transactionId, userId: user.id },
+					updatedTransaction,
+					{ new: true },
+				);
 
 				await Redis.del(`budgets:${user.id}`);
 				await Redis.del(`transactions:${user.id}`);
@@ -249,30 +304,42 @@ const TransactionRoutes = new Elysia({
 			}
 
 			try {
-				const deletedTransaction = await TransactionModel.findOneAndDelete({
-					_id: transactionId,
+				const existingTransaction = await TransactionModel.findOne({
 					userId: user.id,
+					_id: transactionId,
 				});
-
-				if (!deletedTransaction) {
+				if (!existingTransaction) {
 					set.status = 404;
 					return { message: "Transaction not found" };
 				}
 
-				if (deletedTransaction.type === "expense") {
-					await BudgetModel.findOneAndUpdate(
+				if (existingTransaction.type === "expense") {
+					const updatedBudget = await BudgetModel.findOneAndUpdate(
 						{
 							userId: user.id,
-							category: deletedTransaction.category,
-							month: new Date(deletedTransaction.date).getMonth() + 1,
-							year: new Date(deletedTransaction.date).getFullYear(),
+							category: existingTransaction.category,
+							month: new Date(existingTransaction.date).getMonth() + 1,
+							year: new Date(existingTransaction.date).getFullYear(),
 						},
 						{
-							$inc: { limit: deletedTransaction.amount },
+							$inc: { limit: existingTransaction.amount },
 						},
 					);
+
+					if (!updatedBudget) {
+						set.status = 404;
+						return {
+							message: "Budget not found",
+						};
+					}
 				}
 
+				const deletedTransaction = {
+					_id: transactionId,
+					userId: user.id,
+				};
+
+				await TransactionModel.findOneAndDelete(deletedTransaction);
 				await Redis.del(`transactions:${user.id}`);
 				await Redis.del(`budgets:${user.id}`);
 
