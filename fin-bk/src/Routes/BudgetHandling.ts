@@ -66,7 +66,9 @@ const BudgetRoutes = new Elysia({
 		}
 
 		try {
-			const cachedBudgets = await Redis.get(`budgets:${user.id}`);
+			const cacheKey = `budgets:${user.id}`;
+
+			const cachedBudgets = await Redis.get(cacheKey);
 			if (cachedBudgets) {
 				set.status = 200;
 				return { budgets: JSON.parse(cachedBudgets) };
@@ -87,7 +89,7 @@ const BudgetRoutes = new Elysia({
 					__v: 0,
 				});
 
-			await Redis.setex(`budgets:${user.id}`, 60 * 30, JSON.stringify(budgets));
+			await Redis.set(cacheKey, JSON.stringify(budgets), "EX", 60 * 30);
 
 			set.status = 200;
 			return { budgets };

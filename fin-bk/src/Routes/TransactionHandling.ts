@@ -96,7 +96,9 @@ const TransactionRoutes = new Elysia({
 		}
 
 		try {
-			const cachedTransactions = await Redis.get(`transactions:${user.id}`);
+			const cacheKey = `transactions:${user.id}`;
+
+			const cachedTransactions = await Redis.get(cacheKey);
 			if (cachedTransactions) {
 				set.status = 200;
 				return { transactions: JSON.parse(cachedTransactions) };
@@ -116,11 +118,7 @@ const TransactionRoutes = new Elysia({
 					__v: 0,
 				});
 
-			await Redis.setex(
-				`transactions:${user.id}`,
-				60 * 30,
-				JSON.stringify(transactions),
-			);
+			await Redis.set(cacheKey, JSON.stringify(transactions), "EX", 60 * 30);
 
 			set.status = 200;
 			return { transactions };
@@ -183,7 +181,6 @@ const TransactionRoutes = new Elysia({
 					month: new Date(existingTransaction.date).getMonth() + 1,
 					year: new Date(existingTransaction.date).getFullYear(),
 				});
-
 				if (!existingBudgetInTransaction) {
 					set.status = 404;
 					return {

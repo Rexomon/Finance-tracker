@@ -83,10 +83,11 @@ const CategoryHandling = new Elysia({
 					__v: 0,
 				}).sort({ type: 1 });
 
-				await Redis.setex(
+				await Redis.set(
 					cacheKey,
-					60 * 30,
 					JSON.stringify(userCategoriesList),
+					"EX",
+					60 * 30,
 				);
 
 				set.status = 200;

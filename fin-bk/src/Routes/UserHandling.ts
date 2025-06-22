@@ -70,10 +70,11 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				await Redis.setex(
+				await Redis.set(
 					`RefreshToken:${user.id}`,
-					refreshTokenExpiry,
 					UserRefreshToken,
+					"EX",
+					refreshTokenExpiry,
 				);
 
 				set.status = 200;
@@ -94,16 +95,18 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 			try {
 				const { name, email, password } = body;
 
-				const existingUserByName = await UserModel.findOne({ name: name });
-				if (existingUserByName) {
-					set.status = 409;
-					return { message: "Name already exists" };
-				}
-
-				const existingUserByEmail = await UserModel.findOne({ email: email });
-				if (existingUserByEmail) {
-					set.status = 409;
-					return { message: "Email already exists" };
+				const existingUser = await UserModel.findOne({
+					$or: [{ name: name }, { email: email }],
+				});
+				if (existingUser) {
+					if (existingUser.name === name) {
+						set.status = 409;
+						return { message: "Name already exists" };
+					}
+					if (existingUser.email === email) {
+						set.status = 409;
+						return { message: "Email already exists" };
+					}
 				}
 
 				const hashPassword = await Bun.password.hash(password, {
@@ -112,11 +115,13 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					timeCost: 2,
 				});
 
-				const newUser = await UserModel.create({
+				const newUser = {
 					name: name,
 					email: email,
 					password: hashPassword,
-				});
+				};
+
+				await UserModel.create(newUser);
 
 				set.status = 201;
 				return {
@@ -153,15 +158,18 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					return { message: "Unauthorized" };
 				}
 
-				const RedisRefreshToken = await Redis.get(
-					`RefreshToken:${decodedToken.id}`,
-				);
+				const cacheKey = `RefreshToken:${decodedToken.id}`;
+
+				const [RedisRefreshToken, user] = await Promise.all([
+					Redis.get(cacheKey),
+					UserModel.findOne({ _id: decodedToken.id }),
+				]);
+
 				if (RefreshToken.value !== RedisRefreshToken) {
 					set.status = 401;
 					return { message: "Unauthorized" };
 				}
 
-				const user = await UserModel.findOne({ _id: decodedToken.id });
 				if (!user) {
 					set.status = 404;
 					return { message: "User does not exist" };
@@ -200,11 +208,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					secrets: Bun.env.COOKIE_SECRET,
 				});
 
-				await Redis.setex(
-					`RefreshToken:${user.id}`,
-					refreshTokenExpiry,
-					UserRefreshToken,
-				);
+				await Redis.set(cacheKey, UserRefreshToken, "EX", refreshTokenExpiry);
 
 				set.status = 200;
 				return { message: "Refresh token success" };
