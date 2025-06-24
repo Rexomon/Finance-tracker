@@ -41,11 +41,18 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 				const accessTokenExpiry = 60 * 30; // 30 minutes in seconds
 				const refreshTokenExpiry = 60 * 60 * 24 * 7; // 7 days in seconds
 
-				const UserAccessToken = await JwtAccessToken.sign({
-					id: user.id,
-					email: user.email,
-					iat: currentTime,
-				});
+				const [UserAccessToken, UserRefreshToken] = await Promise.all([
+					JwtAccessToken.sign({
+						id: user.id,
+						email: user.email,
+						iat: currentTime,
+					}),
+
+					JwtRefreshToken.sign({
+						id: user.id,
+						iat: currentTime,
+					}),
+				]);
 
 				AccessToken.set({
 					value: UserAccessToken,
@@ -54,11 +61,6 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					sameSite: "lax",
 					maxAge: accessTokenExpiry,
 					secrets: Bun.env.COOKIE_SECRET,
-				});
-
-				const UserRefreshToken = await JwtRefreshToken.sign({
-					id: user.id,
-					iat: currentTime,
 				});
 
 				RefreshToken.set({
@@ -94,6 +96,16 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		async ({ set, body }) => {
 			try {
 				const { name, email, password } = body;
+
+				const lockKey = `lock:UserRegister:${email}`;
+
+				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
+				if (!lockAcquired) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
 
 				const existingUser = await UserModel.findOne({
 					$or: [{ name: name }, { email: email }],
@@ -151,13 +163,23 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 				return { message: "Unauthorized" };
 			}
 
-			try {
-				const decodedToken = await JwtRefreshToken.verify(RefreshToken.value);
-				if (!decodedToken) {
-					set.status = 401;
-					return { message: "Unauthorized" };
-				}
+			const decodedToken = await JwtRefreshToken.verify(RefreshToken.value);
+			if (!decodedToken) {
+				set.status = 401;
+				return { message: "Unauthorized" };
+			}
 
+			const lockKey = `lock:RefreshToken:${decodedToken.id}`;
+
+			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
+			if (!lockAcquired) {
+				set.status = 429;
+				return {
+					message: "Too many requests, please wait a moment and try again",
+				};
+			}
+
+			try {
 				const cacheKey = `RefreshToken:${decodedToken.id}`;
 
 				const [RedisRefreshToken, user] = await Promise.all([
@@ -179,11 +201,18 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 				const accessTokenExpiry = 60 * 30; // 30 minutes in seconds
 				const refreshTokenExpiry = 60 * 60 * 24 * 7; // 7 days in seconds
 
-				const UserAccessToken = await JwtAccessToken.sign({
-					id: user.id,
-					email: user.email,
-					iat: currentTime,
-				});
+				const [UserAccessToken, UserRefreshToken] = await Promise.all([
+					JwtAccessToken.sign({
+						id: user.id,
+						email: user.email,
+						iat: currentTime,
+					}),
+
+					JwtRefreshToken.sign({
+						id: user.id,
+						iat: currentTime,
+					}),
+				]);
 
 				AccessToken.set({
 					value: UserAccessToken,
@@ -192,11 +221,6 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					sameSite: "lax",
 					maxAge: accessTokenExpiry,
 					secrets: Bun.env.COOKIE_SECRET,
-				});
-
-				const UserRefreshToken = await JwtRefreshToken.sign({
-					id: user.id,
-					iat: currentTime,
 				});
 
 				RefreshToken.set({

@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import BudgetModel from "../Model/BudgetModel";
+import CategoryModel from "../Model/CategoryModel";
 import TransactionModel from "../Model/TransactionModel";
 import TransactionsTypes from "../Types/TransactionsTypes";
 
@@ -23,14 +24,24 @@ const TransactionRoutes = new Elysia({
 			try {
 				const { amount, category, type, description, date } = body;
 
-				const transactionData = {
+				const existingCategory = await CategoryModel.exists({
 					userId: user.id,
-					amount,
-					category,
-					type,
-					description,
-					date,
-				};
+					_id: category,
+				});
+				if (!existingCategory) {
+					set.status = 404;
+					return { message: "Category not found" };
+				}
+
+				const lockKey = `lock:CreateTransaction:${user.id}:${category}:${type}:${date}`;
+
+				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
+				if (!lockAcquired) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
 
 				// Deduct budget limit if the transaction is an expense
 				if (type === "expense") {
@@ -38,12 +49,13 @@ const TransactionRoutes = new Elysia({
 					const year = new Date(date).getFullYear();
 
 					const [existingBudget, newBudgetLimit] = await Promise.all([
-						BudgetModel.findOne({
+						BudgetModel.exists({
 							userId: user.id,
 							category: category,
 							month: month,
 							year: year,
 						}),
+
 						BudgetModel.findOneAndUpdate(
 							{
 								userId: user.id,
@@ -70,12 +82,27 @@ const TransactionRoutes = new Elysia({
 							message: "You don't have enough budget for this transaction",
 						};
 					}
-
-					await Redis.del(`budgets:${user.id}`);
 				}
 
-				await TransactionModel.create(transactionData);
-				await Redis.del(`transactions:${user.id}`);
+				const transactionData = {
+					userId: user.id,
+					amount,
+					category,
+					type,
+					description,
+					date,
+				};
+
+				// Collect all cache keys that need to be deleted
+				const cacheKeysToDelete = [`transactions:${user.id}`];
+				if (type === "expense") {
+					cacheKeysToDelete.push(`budgets:${user.id}`);
+				}
+
+				await Promise.all([
+					TransactionModel.create(transactionData),
+					Redis.del(...cacheKeysToDelete),
+				]);
 
 				set.status = 201;
 				return { message: "Transaction created" };
@@ -144,89 +171,44 @@ const TransactionRoutes = new Elysia({
 				return { message: "Invalid transaction id" };
 			}
 
+			const lockKey = `lock:UpdateTransaction:${user.id}:${transactionId}`;
+
+			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
+			if (!lockAcquired) {
+				set.status = 429;
+				return {
+					message: "Too many requests, please wait a moment and try again",
+				};
+			}
+
 			try {
 				const { amount, category, type, description, date } = body;
 
-				const [existingTransaction, budgetForUpdate] = await Promise.all([
-					TransactionModel.findOne({
-						_id: transactionId,
-						userId: user.id,
-					}),
-
-					// Find the budget based on the incoming category and date [budgetForUpdate]
-					// This is to ensure that the budget is exist before updating the transaction
-					BudgetModel.findOne({
-						userId: user.id,
-						category,
-						month: new Date(date).getMonth() + 1,
-						year: new Date(date).getFullYear(),
-					}),
-				]);
-
-				if (!budgetForUpdate) {
-					set.status = 404;
-					return {
-						message: "Please create a budget for this category first",
-					};
-				}
-
+				const existingTransaction = await TransactionModel.findOne({
+					_id: transactionId,
+					userId: user.id,
+				});
 				if (!existingTransaction) {
 					set.status = 404;
 					return { message: "Transaction not found" };
 				}
 
-				const existingBudgetInTransaction = await BudgetModel.findOne({
-					userId: user.id,
-					category: existingTransaction.category,
-					month: new Date(existingTransaction.date).getMonth() + 1,
-					year: new Date(existingTransaction.date).getFullYear(),
-				});
-				if (!existingBudgetInTransaction) {
-					set.status = 404;
-					return {
-						message:
-							"This might be an error. Budget not found as it need to be connected to the transaction",
-					};
-				}
-
-				// These logics are to ensure that the budget is enough for the new transaction
-				let isBudgetEnough = false;
-				const isSameCategory = existingBudgetInTransaction._id.equals(
-					budgetForUpdate._id,
-				);
-
-				if (isSameCategory) {
-					const returnedLimit =
-						existingBudgetInTransaction.limit + existingTransaction.amount;
-
-					// If the old budget category is the same as the new budget category,
-					// then we can use the returned budget limit to check if the budget is enough,
-					// for the new transaction
-					if (returnedLimit >= amount) {
-						isBudgetEnough = true;
-					}
-				} else {
-					// If the old budget category is different from the new budget category,
-					// then we need to check if the new budget limit is enough for the new transaction
-					if (budgetForUpdate.limit >= amount) {
-						isBudgetEnough = true;
-					}
-				}
-
-				// Return the budget limit back to the original amount,
-				// if the old transaction type is expense and the budget is enough for the new transaction to be created
-				if (existingTransaction.type === "expense" && isBudgetEnough) {
-					const updatedBudgetLimit = await BudgetModel.findByIdAndUpdate(
-						existingBudgetInTransaction._id,
+				// Return budget limit if the existing transaction is an expense
+				if (existingTransaction.type === "expense") {
+					const returnedLimit = await BudgetModel.findOneAndUpdate(
+						{
+							userId: user.id,
+							category: existingTransaction.category,
+							month: new Date(existingTransaction.date).getMonth() + 1,
+							year: new Date(existingTransaction.date).getFullYear(),
+						},
 						{ $inc: { limit: existingTransaction.amount } },
 						{ new: true },
 					);
 
-					if (!updatedBudgetLimit) {
+					if (!returnedLimit) {
 						set.status = 404;
-						return {
-							message: "Budget not found",
-						};
+						return { message: "Budget not found" };
 					}
 				}
 
@@ -245,6 +227,25 @@ const TransactionRoutes = new Elysia({
 					);
 
 					if (!deductedBudgetLimit) {
+						// If the budget limit is not sufficient, return the limit back to the previous transaction
+						if (existingTransaction.type === "expense") {
+							const decreasedLimit = await BudgetModel.findOneAndUpdate(
+								{
+									userId: user.id,
+									category: existingTransaction.category,
+									month: new Date(existingTransaction.date).getMonth() + 1,
+									year: new Date(existingTransaction.date).getFullYear(),
+								},
+								{ $inc: { limit: -existingTransaction.amount } },
+								{ new: true },
+							);
+
+							if (!decreasedLimit) {
+								set.status = 404;
+								return { message: "Budget not found" };
+							}
+						}
+
 						set.status = 400;
 						return {
 							message: "You don't have enough budget for this transaction",
@@ -260,14 +261,20 @@ const TransactionRoutes = new Elysia({
 					date,
 				};
 
-				await TransactionModel.findOneAndUpdate(
-					{ _id: transactionId, userId: user.id },
-					updatedTransaction,
-					{ new: true },
-				);
+				const cacheKeysToDelete = [
+					`transactions:${user.id}`,
+					`budgets:${user.id}`,
+				];
 
-				await Redis.del(`budgets:${user.id}`);
-				await Redis.del(`transactions:${user.id}`);
+				await Promise.all([
+					TransactionModel.findOneAndUpdate(
+						{ _id: transactionId, userId: user.id },
+						updatedTransaction,
+						{ new: true },
+					),
+
+					Redis.del(...cacheKeysToDelete),
+				]);
 
 				set.status = 200;
 				return { message: "Transaction updated" };
@@ -336,9 +343,16 @@ const TransactionRoutes = new Elysia({
 					userId: user.id,
 				};
 
-				await TransactionModel.findOneAndDelete(deletedTransaction);
-				await Redis.del(`transactions:${user.id}`);
-				await Redis.del(`budgets:${user.id}`);
+				// Collect all cache keys that need to be deleted
+				const cacheKeysToDelete = [`transactions:${user.id}`];
+				if (existingTransaction.type === "expense") {
+					cacheKeysToDelete.push(`budgets:${user.id}`);
+				}
+
+				await Promise.all([
+					TransactionModel.findOneAndDelete(deletedTransaction),
+					Redis.del(...cacheKeysToDelete),
+				]);
 
 				set.status = 200;
 				return { message: "Transaction deleted" };

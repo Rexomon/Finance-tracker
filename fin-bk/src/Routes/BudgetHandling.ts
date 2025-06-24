@@ -3,6 +3,7 @@ import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import BudgetTypes from "../Types/BudgetTypes";
 import BudgetModel from "../Model/BudgetModel";
+import CategoryModel from "../Model/CategoryModel";
 
 const BudgetRoutes = new Elysia({
 	prefix: "/budgets",
@@ -22,12 +23,34 @@ const BudgetRoutes = new Elysia({
 			try {
 				const { category, limit, month, year } = body;
 
-				const existingBudget = await BudgetModel.findOne({
-					userId: user.id,
-					category: category,
-					month: month,
-					year: year,
-				});
+				const lockKey = `lock:CreateBudget:${user.id}:${category}:${month}:${year}`;
+
+				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
+				if (!lockAcquired) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
+				const [existingCategory, existingBudget] = await Promise.all([
+					CategoryModel.exists({
+						userId: user.id,
+						_id: category,
+					}),
+
+					BudgetModel.exists({
+						userId: user.id,
+						category: category,
+						month: month,
+						year: year,
+					}),
+				]);
+
+				if (!existingCategory) {
+					set.status = 404;
+					return { message: "Category not found" };
+				}
 
 				if (existingBudget) {
 					set.status = 409;
@@ -44,8 +67,10 @@ const BudgetRoutes = new Elysia({
 					year,
 				};
 
-				await BudgetModel.create(budgetData);
-				await Redis.del(`budgets:${user.id}`);
+				await Promise.all([
+					BudgetModel.create(budgetData),
+					Redis.del(`budgets:${user.id}`),
+				]);
 
 				set.status = 201;
 				return { message: "Budget created successfully" };
@@ -111,6 +136,16 @@ const BudgetRoutes = new Elysia({
 		if (!objectIdRegex.test(budgetId)) {
 			set.status = 400;
 			return { message: "Invalid budget id" };
+		}
+
+		const lockKey = `lock:DeleteBudget:${budgetId}:${user.id}`;
+
+		const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
+		if (!lockAcquired) {
+			set.status = 429;
+			return {
+				message: "Too many requests, please wait a moment and try again",
+			};
 		}
 
 		try {

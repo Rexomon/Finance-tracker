@@ -4,7 +4,11 @@ import Auth from "../Middleware/Auth";
 import BudgetModel from "../Model/BudgetModel";
 import CategoryModel from "../Model/CategoryModel";
 import TransactionModel from "../Model/TransactionModel";
-import { CategoryQueryTypes, CategoryTypes } from "../Types/CategoryTypes";
+import {
+	type CategoryQueryFilter,
+	CategoryQueryTypes,
+	CategoryTypes,
+} from "../Types/CategoryTypes";
 
 const CategoryHandling = new Elysia({
 	prefix: "/categories",
@@ -24,21 +28,37 @@ const CategoryHandling = new Elysia({
 			try {
 				const { categoryName, type } = body;
 
+				const lockKey = `lock:CreateCategory:${user.id}:${categoryName}:${type}`;
+
+				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
+				if (!lockAcquired) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				const createNewCategory = {
 					userId: user.id,
 					categoryName,
 					type,
 				};
 
-				const existingCategory = await CategoryModel.findOne(createNewCategory);
+				const existingCategory = await CategoryModel.exists(createNewCategory);
 				if (existingCategory) {
 					set.status = 409;
 					return { message: "Category already exists" };
 				}
 
-				await CategoryModel.create(createNewCategory);
-				await Redis.del(`categories:${user.id}`);
-				await Redis.del(`categories:${user.id}:${type}`);
+				const cacheKeysToDelete = [
+					`categories:${user.id}`,
+					`categories:${user.id}:${type}`,
+				];
+
+				await Promise.all([
+					CategoryModel.create(createNewCategory),
+					Redis.del(...cacheKeysToDelete),
+				]);
 
 				set.status = 201;
 				return { message: "Category created successfully" };
@@ -71,9 +91,7 @@ const CategoryHandling = new Elysia({
 					return { categories: JSON.parse(cachedCategories) };
 				}
 
-				const userQueryDetails: { userId: string | number; type?: string } = {
-					userId: user.id,
-				};
+				const userQueryDetails: CategoryQueryFilter = { userId: user.id };
 				if (type) {
 					userQueryDetails.type = type;
 				}
@@ -82,6 +100,12 @@ const CategoryHandling = new Elysia({
 					userId: 0,
 					__v: 0,
 				}).sort({ type: 1 });
+				if (userCategoriesList.length === 0) {
+					set.status = 404;
+					return {
+						message: "No categories found, or you have not created any",
+					};
+				}
 
 				await Redis.set(
 					cacheKey,
@@ -113,15 +137,31 @@ const CategoryHandling = new Elysia({
 			return { message: "Invalid category id" };
 		}
 
+		const lockKey = `lock:DeleteCategory:${user.id}:${categoryId}`;
+
+		const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
+		if (!lockAcquired) {
+			set.status = 429;
+			return {
+				message: "Too many requests, please wait a moment and try again",
+			};
+		}
+
 		try {
-			const transactionUsingCategory = await TransactionModel.findOne({
-				userId: user.id,
-				category: categoryId,
-			});
-			const budgetUsingCategory = await BudgetModel.findOne({
-				userId: user.id,
-				category: categoryId,
-			});
+			const [transactionUsingCategory, budgetUsingCategory] = await Promise.all(
+				[
+					TransactionModel.exists({
+						userId: user.id,
+						category: categoryId,
+					}),
+
+					BudgetModel.exists({
+						userId: user.id,
+						category: categoryId,
+					}),
+				],
+			);
+
 			if (transactionUsingCategory || budgetUsingCategory) {
 				set.status = 400;
 				return {
@@ -139,8 +179,10 @@ const CategoryHandling = new Elysia({
 				return { message: "Category not found" };
 			}
 
-			await Redis.del(`categories:${user.id}`);
-			await Redis.del(`categories:${user.id}:${deleteCategory.type}`);
+			await Promise.all([
+				Redis.del(`categories:${user.id}`),
+				Redis.del(`categories:${user.id}:${deleteCategory.type}`),
+			]);
 
 			set.status = 200;
 			return { message: "Category deleted successfully" };
@@ -166,36 +208,57 @@ const CategoryHandling = new Elysia({
 				return { message: "Invalid category id" };
 			}
 
+			const lockKey = `lock:UpdateCategory:${user.id}:${categoryId}`;
+
+			const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
+			if (!lockAcquired) {
+				set.status = 429;
+				return {
+					message: "Too many requests, please wait a moment and try again",
+				};
+			}
+
 			try {
 				const { categoryName, type } = body;
 
-				const existingCategory = await CategoryModel.findOne({
-					userId: user.id,
-					categoryName: categoryName,
-					type: type,
-				});
+				const [
+					existingCategory,
+					currentCategory,
+					transactionUsingCategory,
+					budgetUsingCategory,
+				] = await Promise.all([
+					CategoryModel.exists({
+						_id: { $ne: categoryId },
+						userId: user.id,
+						categoryName: categoryName,
+						type: type,
+					}),
+
+					CategoryModel.findOne({
+						userId: user.id,
+						_id: categoryId,
+					}),
+
+					TransactionModel.exists({
+						userId: user.id,
+						category: categoryId,
+					}),
+
+					BudgetModel.exists({
+						userId: user.id,
+						category: categoryId,
+					}),
+				]);
+
 				if (existingCategory) {
 					set.status = 409;
 					return { message: "Category already exists" };
 				}
 
-				const currentCategory = await CategoryModel.findOne({
-					userId: user.id,
-					_id: categoryId,
-				});
 				if (!currentCategory) {
 					set.status = 404;
 					return { message: "Category not found" };
 				}
-
-				const transactionUsingCategory = await TransactionModel.findOne({
-					userId: user.id,
-					category: categoryId,
-				});
-				const budgetUsingCategory = await BudgetModel.findOne({
-					userId: user.id,
-					category: categoryId,
-				});
 
 				// If the category is being used in transactions or budgets, we cannot change its type
 				if (
@@ -225,19 +288,27 @@ const CategoryHandling = new Elysia({
 
 				// If the category is not being used in transactions or budgets, we can safely update it
 				if (!transactionUsingCategory && !budgetUsingCategory) {
-					await Redis.del(`categories:${user.id}`);
-					await Redis.del(`categories:${user.id}:income`);
-					await Redis.del(`categories:${user.id}:expense`);
+					const cacheKeysToDelete = [
+						`categories:${user.id}`,
+						`categories:${user.id}:income`,
+						`categories:${user.id}:expense`,
+					];
+
+					await Promise.all([Redis.del(...cacheKeysToDelete)]);
 
 					set.status = 200;
 					return { message: "Lonely Category updated successfully" };
 				}
 
-				await Redis.del(`budgets:${user.id}`);
-				await Redis.del(`transactions:${user.id}`);
-				await Redis.del(`categories:${user.id}`);
-				await Redis.del(`categories:${user.id}:income`);
-				await Redis.del(`categories:${user.id}:expense`);
+				const cacheKeysToDelete = [
+					`budgets:${user.id}`,
+					`transactions:${user.id}`,
+					`categories:${user.id}`,
+					`categories:${user.id}:income`,
+					`categories:${user.id}:expense`,
+				];
+
+				await Redis.del(...cacheKeysToDelete);
 
 				set.status = 200;
 				return { message: "Category updated successfully" };

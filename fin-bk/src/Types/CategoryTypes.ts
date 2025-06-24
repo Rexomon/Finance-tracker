@@ -17,3 +17,8 @@ export const CategoryQueryTypes = t.Object({
 		}),
 	),
 });
+
+export type CategoryQueryFilter = {
+	userId: string | number;
+	type?: "income" | "expense";
+};
