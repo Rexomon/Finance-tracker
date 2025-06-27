@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-const TransactionsTypes = t.Object({
+export const TransactionsTypes = t.Object({
 	amount: t.Number({ error: "Invalid amount" }),
 	category: t.String({
 		pattern: "^[0-9a-fA-F]{24}$",
@@ -13,4 +13,9 @@ const TransactionsTypes = t.Object({
 	}),
 });
 
-export default TransactionsTypes;
+export const TransactionParamsTypes = t.Object({
+	transactionId: t.String({
+		pattern: "^[0-9a-fA-F]{24}$",
+		error: "Invalid transaction id",
+	}),
+});

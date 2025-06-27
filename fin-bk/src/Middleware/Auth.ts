@@ -24,16 +24,17 @@ const Auth = (app: Elysia) =>
 						return { message: "Unauthorized" };
 					}
 
-					const existingUser = await UserModel.findOne({ _id: decoded.id });
+					const [existingUser, RedisRefreshToken] = await Promise.all([
+						UserModel.exists({ _id: decoded.id }),
+						Redis.get(`RefreshToken:${decoded.id}`),
+					]);
+
 					if (!existingUser) {
 						set.status = 404;
 						return { message: "User not found" };
 					}
 
 					// Single session sign in check
-					const RedisRefreshToken = await Redis.get(
-						`RefreshToken:${decoded.id}`,
-					);
 					if (!RedisRefreshToken) {
 						set.status = 401;
 						return { message: "Session expired" };

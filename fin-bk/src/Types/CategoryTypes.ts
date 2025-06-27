@@ -18,6 +18,13 @@ export const CategoryQueryTypes = t.Object({
 	),
 });
 
+export const CategoryParamsTypes = t.Object({
+	categoryId: t.String({
+		pattern: "^[a-fA-F0-9]{24}$",
+		error: "Invalid category id",
+	}),
+});
+
 export type CategoryQueryFilter = {
 	userId: string | number;
 	type?: "income" | "expense";

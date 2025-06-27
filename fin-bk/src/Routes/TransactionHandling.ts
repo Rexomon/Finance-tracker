@@ -4,7 +4,10 @@ import Auth from "../Middleware/Auth";
 import BudgetModel from "../Model/BudgetModel";
 import CategoryModel from "../Model/CategoryModel";
 import TransactionModel from "../Model/TransactionModel";
-import TransactionsTypes from "../Types/TransactionsTypes";
+import {
+	TransactionsTypes,
+	TransactionParamsTypes,
+} from "../Types/TransactionsTypes";
 
 const TransactionRoutes = new Elysia({
 	prefix: "/transactions",
@@ -143,7 +146,14 @@ const TransactionRoutes = new Elysia({
 					createdAt: 0,
 					updatedAt: 0,
 					__v: 0,
-				});
+				})
+				.lean();
+			if (transactions.length === 0) {
+				set.status = 404;
+				return {
+					message: "No transactions found, or you have not created any",
+				};
+			}
 
 			await Redis.set(cacheKey, JSON.stringify(transactions), "EX", 60 * 30);
 
@@ -163,12 +173,6 @@ const TransactionRoutes = new Elysia({
 			if (!user) {
 				set.status = 401;
 				return { message: "Unauthorized" };
-			}
-
-			const objectIdRegex = /^[0-9a-fA-F]{24}$/;
-			if (!objectIdRegex.test(transactionId)) {
-				set.status = 400;
-				return { message: "Invalid transaction id" };
 			}
 
 			const lockKey = `lock:UpdateTransaction:${user.id}:${transactionId}`;
@@ -289,7 +293,7 @@ const TransactionRoutes = new Elysia({
 				return { message: "An internal server error occurred" };
 			}
 		},
-		{ body: TransactionsTypes },
+		{ body: TransactionsTypes, params: TransactionParamsTypes },
 	)
 
 	// Delete a transaction by ID
@@ -299,12 +303,6 @@ const TransactionRoutes = new Elysia({
 			if (!user) {
 				set.status = 401;
 				return { message: "Unauthorized" };
-			}
-
-			const objectIdRegex = /^[0-9a-fA-F]{24}$/;
-			if (!objectIdRegex.test(transactionId)) {
-				set.status = 400;
-				return { message: "Invalid transaction id" };
 			}
 
 			try {
@@ -367,6 +365,7 @@ const TransactionRoutes = new Elysia({
 				return { message: "An internal server error occurred" };
 			}
 		},
+		{ params: TransactionParamsTypes },
 	);
 
 export default TransactionRoutes;

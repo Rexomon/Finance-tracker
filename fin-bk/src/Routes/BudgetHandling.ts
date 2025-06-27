@@ -1,9 +1,9 @@
 import { Elysia } from "elysia";
 import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
-import BudgetTypes from "../Types/BudgetTypes";
 import BudgetModel from "../Model/BudgetModel";
 import CategoryModel from "../Model/CategoryModel";
+import { BudgetTypes, BudgetParamsTypes } from "../Types/BudgetTypes";
 
 const BudgetRoutes = new Elysia({
 	prefix: "/budgets",
@@ -112,7 +112,12 @@ const BudgetRoutes = new Elysia({
 					createdAt: 0,
 					updatedAt: 0,
 					__v: 0,
-				});
+				})
+				.lean();
+			if (budgets.length === 0) {
+				set.status = 404;
+				return { message: "No budgets found, or you have not created any" };
+			}
 
 			await Redis.set(cacheKey, JSON.stringify(budgets), "EX", 60 * 30);
 
@@ -126,52 +131,50 @@ const BudgetRoutes = new Elysia({
 	})
 
 	// Delete a budget by ID
-	.delete("/:budgetId", async ({ set, user, params: { budgetId } }) => {
-		if (!user) {
-			set.status = 401;
-			return { message: "Unauthorized" };
-		}
-
-		const objectIdRegex = /^[0-9a-fA-F]{24}$/;
-		if (!objectIdRegex.test(budgetId)) {
-			set.status = 400;
-			return { message: "Invalid budget id" };
-		}
-
-		const lockKey = `lock:DeleteBudget:${budgetId}:${user.id}`;
-
-		const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
-		if (!lockAcquired) {
-			set.status = 429;
-			return {
-				message: "Too many requests, please wait a moment and try again",
-			};
-		}
-
-		try {
-			const deleteBudget = await BudgetModel.findOneAndDelete({
-				_id: budgetId,
-				userId: user.id,
-			});
-
-			if (!deleteBudget) {
-				set.status = 404;
-				return { message: "Budget not found" };
+	.delete(
+		"/:budgetId",
+		async ({ set, user, params: { budgetId } }) => {
+			if (!user) {
+				set.status = 401;
+				return { message: "Unauthorized" };
 			}
 
-			await Redis.del(`budgets:${user.id}`);
+			const lockKey = `lock:DeleteBudget:${budgetId}:${user.id}`;
 
-			set.status = 200;
-			return { message: "Budget deleted successfully" };
-		} catch (error) {
-			if (error instanceof Error && error.name === "CastError") {
-				set.status = 400;
-				return { message: "Invalid budget id" };
+			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
+			if (!lockAcquired) {
+				set.status = 429;
+				return {
+					message: "Too many requests, please wait a moment and try again",
+				};
 			}
-			set.status = 500;
-			console.error(error);
-			return { message: "An internal server error occurred" };
-		}
-	});
+
+			try {
+				const deleteBudget = await BudgetModel.findOneAndDelete({
+					_id: budgetId,
+					userId: user.id,
+				});
+
+				if (!deleteBudget) {
+					set.status = 404;
+					return { message: "Budget not found" };
+				}
+
+				await Redis.del(`budgets:${user.id}`);
+
+				set.status = 200;
+				return { message: "Budget deleted successfully" };
+			} catch (error) {
+				if (error instanceof Error && error.name === "CastError") {
+					set.status = 400;
+					return { message: "Invalid budget id" };
+				}
+				set.status = 500;
+				console.error(error);
+				return { message: "An internal server error occurred" };
+			}
+		},
+		{ params: BudgetParamsTypes },
+	);
 
 export default BudgetRoutes;
