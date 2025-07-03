@@ -10,14 +10,6 @@ export const CategoryTypes = t.Object({
 	}),
 });
 
-export const CategoryQueryTypes = t.Object({
-	type: t.Optional(
-		t.Union([t.Literal("income"), t.Literal("expense")], {
-			error: "Invalid category type",
-		}),
-	),
-});
-
 export const CategoryParamsTypes = t.Object({
 	categoryId: t.String({
 		pattern: "^[a-fA-F0-9]{24}$",
@@ -25,7 +17,8 @@ export const CategoryParamsTypes = t.Object({
 	}),
 });
 
+export const CategoryQueryTypes = t.Partial(t.Pick(CategoryTypes, ["type"]));
+
 export type CategoryQueryFilter = {
 	userId: string | number;
-	type?: "income" | "expense";
-};
+} & typeof CategoryQueryTypes.static;

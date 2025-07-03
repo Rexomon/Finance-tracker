@@ -14,7 +14,9 @@ export const UserRegisterTypes = t.Object({
 	}),
 });
 
-export const UserLoginTypes = t.Object({
-	email: t.String({ format: "email", error: "Invalid email" }),
-	password: t.String({ error: "Password is required" }),
-});
+export const UserLoginTypes = t.Intersect([
+	t.Pick(UserRegisterTypes, ["email"]),
+	t.Object({
+		password: t.String({ minLength: 1, error: "Password is required" }),
+	}),
+]);
