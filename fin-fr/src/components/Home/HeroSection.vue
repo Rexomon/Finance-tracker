@@ -13,9 +13,12 @@
             Track expenses, manage budgets, and achieve your financial goals with our easy-to-use finance tracker.
           </p>
           <div class="flex flex-col sm:flex-row gap-4">
-            <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all cursor-pointer">
+            <router-link
+              to="/signup"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all cursor-pointer text-center"
+            >
               Get Started
-            </button>
+            </router-link>
             <button class="bg-transparent border border-white text-white font-bold py-3 px-6 rounded-lg hover:bg-white hover:text-black transition-all cursor-pointer">
               Learn More
             </button>
