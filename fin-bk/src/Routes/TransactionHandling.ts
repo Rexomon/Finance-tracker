@@ -149,7 +149,7 @@ const TransactionRoutes = new Elysia({
 				})
 				.lean();
 			if (transactions.length === 0) {
-				set.status = 404;
+				set.status = 200;
 				return {
 					message: "No transactions found, or you have not created any",
 				};

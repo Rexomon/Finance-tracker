@@ -3,6 +3,7 @@ import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import BudgetModel from "../Model/BudgetModel";
 import CategoryModel from "../Model/CategoryModel";
+import TransactionModel from "../Model/TransactionModel";
 import { BudgetTypes, BudgetParamsTypes } from "../Types/BudgetTypes";
 
 const BudgetRoutes = new Elysia({
@@ -114,8 +115,11 @@ const BudgetRoutes = new Elysia({
 					__v: 0,
 				})
 				.lean();
+
+			// Always return 200 with budgets array (even if empty)
+			// This provides consistent API behavior
 			if (budgets.length === 0) {
-				set.status = 404;
+				set.status = 200;
 				return { message: "No budgets found, or you have not created any" };
 			}
 
@@ -150,15 +154,34 @@ const BudgetRoutes = new Elysia({
 			}
 
 			try {
-				const deleteBudget = await BudgetModel.findOneAndDelete({
-					_id: budgetId,
-					userId: user.id,
-				});
-
-				if (!deleteBudget) {
+				const existingBudget = await BudgetModel.findOne(
+					{
+						_id: budgetId,
+						userId: user.id,
+					},
+					{ category: 1 },
+				);
+				if (!existingBudget) {
 					set.status = 404;
 					return { message: "Budget not found" };
 				}
+
+				const transactionUsingBudget = await TransactionModel.exists({
+					userId: user.id,
+					category: existingBudget.category,
+				});
+				if (transactionUsingBudget) {
+					set.status = 400;
+					return {
+						message:
+							"Budget cannot be deleted as it is being used in transactions",
+					};
+				}
+
+				await BudgetModel.findOneAndDelete({
+					_id: budgetId,
+					userId: user.id,
+				});
 
 				await Redis.del(`budgets:${user.id}`);
 

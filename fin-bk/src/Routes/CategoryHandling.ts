@@ -104,7 +104,7 @@ const CategoryHandling = new Elysia({
 					.sort({ type: 1 })
 					.lean();
 				if (userCategoriesList.length === 0) {
-					set.status = 404;
+					set.status = 200;
 					return {
 						message: "No categories found, or you have not created any",
 					};
