@@ -11,7 +11,9 @@
 		"type-check": "vue-tsc --build"
 	},
 	"dependencies": {
+		"@primevue/themes": "^4.3.6",
 		"@tailwindcss/vite": "^4.1.11",
+		"primevue": "^4.3.6",
 		"tailwindcss": "^4.1.11",
 		"vue": "^3.5.17",
 		"vue-router": "^4.5.1"
@@ -24,7 +26,7 @@
 		"@vue/tsconfig": "^0.7.0",
 		"npm-run-all2": "^8.0.4",
 		"typescript": "~5.8.3",
-		"vite": "^7.0.1",
+		"vite": "^7.0.2",
 		"vite-plugin-vue-devtools": "^7.7.7",
 		"vue-tsc": "^3.0.1"
 	}

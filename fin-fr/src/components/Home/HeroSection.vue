@@ -25,7 +25,7 @@
           </div>
         </div>
         <div class="md:w-1/2 mt-10 md:mt-0">
-          <img src="https://placehold.co/600x400/252525/FFFFFF/png?text=Finance+Dashboard" alt="Finance Dashboard" class="rounded-lg shadow-lg" />
+          <img src="https://picsum.photos/seed/finance-dashboard/800/400" alt="Finance Dashboard" loading="lazy" class="rounded-lg shadow-lg" />
         </div>
       </div>
     </div>

@@ -1,41 +1,25 @@
 <template>
   <div class="expense-chart">
     <div v-if="data.length === 0" class="text-center py-8">
-      <p class="text-gray-500">Belum ada data pengeluaran untuk bulan ini</p>
+      <p class="text-gray-500">No expense have been made this month</p>
     </div>
     <div v-else class="relative overflow-hidden">
       <!-- Simple pie chart using CSS -->
       <div class="flex flex-col space-y-4">
         <div class="flex justify-center">
           <svg width="200" height="200" class="transform -rotate-90">
-            <circle
-              v-for="(item, index) in chartData"
-              :key="index"
-              :cx="100"
-              :cy="100"
-              :r="80"
-              fill="none"
-              :stroke="colors[index % colors.length]"
-              :stroke-width="20"
+            <circle v-for="(item, index) in chartData" :key="index" :cx="100" :cy="100" :r="80" fill="none"
+              :stroke="colors[index % colors.length]" :stroke-width="20"
               :stroke-dasharray="`${item.percentage * 2 * Math.PI * 80 / 100} ${2 * Math.PI * 80}`"
-              :stroke-dashoffset="calculateOffset(index)"
-              class="transition-all duration-300"
-            />
+              :stroke-dashoffset="calculateOffset(index)" class="transition-all duration-300" />
           </svg>
         </div>
 
         <!-- Legend -->
         <div class="flex flex-wrap justify-center gap-4">
-          <div
-            v-for="(item, index) in chartData"
-            :key="index"
-            class="flex items-center space-x-2"
-          >
-            <div
-              class="w-4 h-4 rounded-full"
-              :style="{ backgroundColor: colors[index % colors.length] }"
-            ></div>
-            <span class="text-sm text-gray-700">
+          <div v-for="(item, index) in chartData" :key="index" class="flex items-center space-x-2">
+            <div class="w-4 h-4 rounded-full" :style="{ backgroundColor: colors[index % colors.length] }"></div>
+            <span class="text-sm text-gray-700 !text-gray-700">
               {{ item.name }} ({{ item.percentage.toFixed(1) }}%)
             </span>
           </div>
@@ -43,19 +27,13 @@
 
         <!-- Data list -->
         <div class="space-y-2">
-          <div
-            v-for="(item, index) in chartData"
-            :key="index"
-            class="flex justify-between items-center p-2 bg-gray-50 rounded"
-          >
+          <div v-for="(item, index) in chartData" :key="index"
+            class="flex justify-between items-center p-2 bg-gray-50 rounded">
             <div class="flex items-center space-x-2">
-              <div
-                class="w-3 h-3 rounded-full"
-                :style="{ backgroundColor: colors[index % colors.length] }"
-              ></div>
-              <span class="text-sm font-medium">{{ item.name }}</span>
+              <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: colors[index % colors.length] }"></div>
+              <span class="text-sm font-medium !text-gray-900">{{ item.name }}</span>
             </div>
-            <span class="text-sm text-gray-600">{{ formatCurrency(item.value) }}</span>
+            <span class="text-sm text-gray-600 !text-gray-600">{{ formatCurrency(item.value) }}</span>
           </div>
         </div>
       </div>

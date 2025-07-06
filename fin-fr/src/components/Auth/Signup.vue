@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import router from "@/router";
+import { useGlobalToast } from "@/composables/useGlobalToast";
+
+const { showSuccessToast, showErrorToast, showInfoToast, showWarnToast } =
+	useGlobalToast();
 
 // Form state
 const name = ref("");
@@ -132,7 +136,7 @@ const handleSubmit = async () => {
 			throw new Error(errorData.message || "Registration failed");
 		}
 
-		alert("Registration successful! Please check your email for verification.");
+		showSuccessToast("Registration successful");
 
 		// Reset form
 		name.value = "";
@@ -143,12 +147,11 @@ const handleSubmit = async () => {
 		// You can redirect to login page here
 		router.push("/login");
 	} catch (error) {
-		console.error("Signup failed:", error);
 		const errorMessage =
 			error instanceof Error
 				? error.message
 				: "Registration failed. Please try again.";
-		alert(`Registration failed: ${errorMessage}`);
+		showErrorToast(`Registration failed: ${errorMessage}`);
 	} finally {
 		isLoading.value = false;
 	}
