@@ -728,7 +728,7 @@ const onTransactionAdded = async () => {
 	closeTransactionModal();
 };
 
-const onEditTransaction = (transaction: Transaction) => {
+const onEditTransaction = async (transaction: Transaction) => {
 	selectedTransaction.value = transaction;
 	editMode.value = true;
 	closeTransactionListModal();
@@ -756,17 +756,17 @@ const onDeleteTransaction = async (transactionId: string) => {
 	}
 };
 
-const onCategoryAdded = () => {
-	fetchCategories();
+const onCategoryAdded = async () => {
+	await fetchCategories();
 	closeCategoryModal();
 };
 
-const onEditCategory = () => {
-	fetchCategories();
+const onEditCategory = async () => {
+	await Promise.all([fetchCategories(), fetchTransactions(), fetchBudgets()]);
 };
 
-const onDeleteCategory = () => {
-	fetchCategories();
+const onDeleteCategory = async () => {
+	await fetchCategories();
 };
 
 const onBudgetAdded = async () => {

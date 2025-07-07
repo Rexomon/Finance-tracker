@@ -1,19 +1,32 @@
 // Utility functions for authentication
-export const checkAuthStatus = async (): Promise<boolean> => {
-	try {
-		const response = await fetch(
-			`${import.meta.env.VITE_BACKEND_URL}/v1/users/profile`,
-			{
-				method: "GET",
-				credentials: "include", // Include cookies
-			},
-		);
 
-		return response.ok;
-	} catch (error) {
-		console.error("Error checking auth status:", error);
-		return false;
+let authCheckPromise: Promise<boolean> | null = null;
+
+export const checkAuthStatus = (): Promise<boolean> => {
+	if (authCheckPromise) {
+		return authCheckPromise;
 	}
+
+	authCheckPromise = (async () => {
+		try {
+			const response = await fetchWithAuth(
+				`${import.meta.env.VITE_BACKEND_URL}/v1/users/profile`,
+				{
+					method: "GET",
+				},
+			);
+			return response.ok;
+		} catch (error) {
+			console.error("Error checking auth status:", error);
+			return false;
+		}
+	})();
+
+	return authCheckPromise;
+};
+
+export const resetAuthStatus = (): void => {
+	authCheckPromise = null;
 };
 
 export const logout = async (): Promise<void> => {
@@ -22,6 +35,8 @@ export const logout = async (): Promise<void> => {
 			method: "POST",
 			credentials: "include", // Include cookies
 		});
+		// Reset the auth check promise on logout
+		resetAuthStatus();
 	} catch (error) {
 		console.error("Error during logout:", error);
 	}

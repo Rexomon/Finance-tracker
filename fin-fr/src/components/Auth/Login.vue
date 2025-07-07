@@ -2,9 +2,10 @@
 import { ref } from "vue";
 import router from "@/router";
 import { useGlobalToast } from "@/composables/useGlobalToast";
+import { resetAuthStatus } from "@/utils/auth";
 
 const { showSuccessToast, showErrorToast, showInfoToast, showWarnToast } =
-	useGlobalToast();
+  useGlobalToast();
 
 // Form state
 const email = ref("");
@@ -19,90 +20,93 @@ const passwordError = ref("");
 
 // Validation functions
 const validateEmail = (email: string) => {
-	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-	if (!email) {
-		return "Email is required";
-	}
-	if (!emailRegex.test(email)) {
-		return "Please enter a valid email address";
-	}
-	return "";
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email) {
+    return "Email is required";
+  }
+  if (!emailRegex.test(email)) {
+    return "Please enter a valid email address";
+  }
+  return "";
 };
 
 const validatePassword = (password: string) => {
-	if (!password) {
-		return "Password is required";
-	}
-	return "";
+  if (!password) {
+    return "Password is required";
+  }
+  return "";
 };
 
 // Form submission
 const handleSubmit = async () => {
-	// Reset errors
-	emailError.value = "";
-	passwordError.value = "";
+  // Reset errors
+  emailError.value = "";
+  passwordError.value = "";
 
-	// Validate form
-	emailError.value = validateEmail(email.value);
-	passwordError.value = validatePassword(password.value);
+  // Validate form
+  emailError.value = validateEmail(email.value);
+  passwordError.value = validatePassword(password.value);
 
-	// If there are errors, don't submit
-	if (emailError.value || passwordError.value) {
-		return;
-	}
+  // If there are errors, don't submit
+  if (emailError.value || passwordError.value) {
+    return;
+  }
 
-	// Start loading
-	isLoading.value = true;
+  // Start loading
+  isLoading.value = true;
 
-	try {
-		// Make API call to backend
-		const response = await fetch(
-			`${import.meta.env.VITE_BACKEND_URL}/v1/users/login`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				credentials: "include", // Important: include cookies in request
-				body: JSON.stringify({
-					email: email.value,
-					password: password.value,
-					rememberMe: rememberMe.value,
-				}),
-			},
-		);
+  try {
+    // Make API call to backend
+    const response = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/users/login`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Important: include cookies in request
+        body: JSON.stringify({
+          email: email.value,
+          password: password.value,
+          rememberMe: rememberMe.value,
+        }),
+      },
+    );
 
-		if (!response.ok) {
-			const errorData = await response.json();
-			throw new Error(errorData.message || "Login failed");
-		}
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Login failed");
+    }
 
-		showSuccessToast("Login successful");
+    // Reset the authentication status cache
+    resetAuthStatus();
 
-		// Redirect to dashboard
-		router.replace("/dashboard");
-	} catch (error) {
-		const errorMessage =
-			error instanceof Error
-				? error.message
-				: "Login failed. Please check your credentials.";
-		showErrorToast(errorMessage);
-	} finally {
-		isLoading.value = false;
-	}
+    showSuccessToast("Login successful");
+
+    // Redirect to dashboard
+    router.replace("/dashboard");
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Login failed. Please check your credentials.";
+    showErrorToast(errorMessage);
+  } finally {
+    isLoading.value = false;
+  }
 };
 
 // Input handlers with real-time validation
 const handleEmailInput = () => {
-	if (emailError.value) {
-		emailError.value = validateEmail(email.value);
-	}
+  if (emailError.value) {
+    emailError.value = validateEmail(email.value);
+  }
 };
 
 const handlePasswordInput = () => {
-	if (passwordError.value) {
-		passwordError.value = validatePassword(password.value);
-	}
+  if (passwordError.value) {
+    passwordError.value = validatePassword(password.value);
+  }
 };
 </script>
 

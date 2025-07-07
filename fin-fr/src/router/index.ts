@@ -46,9 +46,10 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
 	// Handle any navigation errors
 	try {
+		const isAuthenticated = await checkAuthStatus();
+
 		// Check if route requires authentication
 		if (to.meta.requiresAuth) {
-			const isAuthenticated = await checkAuthStatus();
 			if (!isAuthenticated) {
 				next("/login");
 				return;
@@ -56,12 +57,9 @@ router.beforeEach(async (to, _from, next) => {
 		}
 
 		// Redirect to dashboard if user is already logged in and trying to access login/signup
-		if (to.name === "login" || to.name === "signup") {
-			const isAuthenticated = await checkAuthStatus();
-			if (isAuthenticated) {
-				next("/dashboard");
-				return;
-			}
+		if ((to.name === "login" || to.name === "signup") && isAuthenticated) {
+			next("/dashboard");
+			return;
 		}
 
 		next();
