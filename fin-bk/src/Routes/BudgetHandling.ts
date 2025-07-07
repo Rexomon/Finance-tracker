@@ -159,7 +159,7 @@ const BudgetRoutes = new Elysia({
 						_id: budgetId,
 						userId: user.id,
 					},
-					{ category: 1 },
+					{ category: 1, month: 1, year: 1 },
 				);
 				if (!existingBudget) {
 					set.status = 404;
@@ -169,6 +169,10 @@ const BudgetRoutes = new Elysia({
 				const transactionUsingBudget = await TransactionModel.exists({
 					userId: user.id,
 					category: existingBudget.category,
+					date: {
+						$gte: new Date(existingBudget.year, existingBudget.month - 1, 1),
+						$lt: new Date(existingBudget.year, existingBudget.month, 1),
+					},
 				});
 				if (transactionUsingBudget) {
 					set.status = 400;
