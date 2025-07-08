@@ -4,7 +4,11 @@ import Auth from "../Middleware/Auth";
 import BudgetModel from "../Model/BudgetModel";
 import CategoryModel from "../Model/CategoryModel";
 import TransactionModel from "../Model/TransactionModel";
-import { BudgetTypes, BudgetParamsTypes } from "../Types/BudgetTypes";
+import {
+	BudgetTypes,
+	BudgetParamsTypes,
+	BudgetPatchTypes,
+} from "../Types/BudgetTypes";
 
 const BudgetRoutes = new Elysia({
 	prefix: "/budgets",
@@ -56,7 +60,7 @@ const BudgetRoutes = new Elysia({
 				if (existingBudget) {
 					set.status = 409;
 					return {
-						message: "Budget already exists for the category for this month",
+						message: "Budget already exists for the category for this date",
 					};
 				}
 
@@ -115,9 +119,6 @@ const BudgetRoutes = new Elysia({
 					__v: 0,
 				})
 				.lean();
-
-			// Always return 200 with budgets array (even if empty)
-			// This provides consistent API behavior
 			if (budgets.length === 0) {
 				set.status = 200;
 				return { message: "No budgets found, or you have not created any" };
@@ -133,6 +134,110 @@ const BudgetRoutes = new Elysia({
 			return { message: "An internal server error occurred" };
 		}
 	})
+
+	// Update a budget by ID
+	.patch(
+		"/:budgetId",
+		async ({ set, user, body, params: { budgetId } }) => {
+			if (!user) {
+				set.status = 401;
+				return { message: "Unauthorized" };
+			}
+
+			const lockKey = `lock:UpdateBudget:${budgetId}:${user.id}`;
+
+			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
+			if (!lockAcquired) {
+				set.status = 429;
+				return {
+					message: "Too many requests, please wait a moment and try again",
+				};
+			}
+
+			try {
+				const { category, limit, month, year } = body;
+
+				const currentBudget = await BudgetModel.findOne({
+					_id: budgetId,
+					userId: user.id,
+				});
+
+				if (!currentBudget) {
+					set.status = 404;
+					return { message: "Budget not found" };
+				}
+
+				const hasCategoryChanged =
+					category && currentBudget.category.toString() !== category;
+				const hasMonthChanged = month && currentBudget.month !== month;
+				const hasYearChanged = year && currentBudget.year !== year;
+
+				if (hasCategoryChanged || hasMonthChanged || hasYearChanged) {
+					const newCategory = category || currentBudget.category;
+					const newMonth = month || currentBudget.month;
+					const newYear = year || currentBudget.year;
+
+					const [existingBudget, transactionUsingBudget] = await Promise.all([
+						BudgetModel.exists({
+							_id: { $ne: budgetId },
+							userId: user.id,
+							category: newCategory,
+							month: newMonth,
+							year: newYear,
+						}),
+
+						TransactionModel.exists({
+							userId: user.id,
+							category: currentBudget.category,
+							date: {
+								$gte: new Date(currentBudget.year, currentBudget.month - 1, 1),
+								$lt: new Date(currentBudget.year, currentBudget.month, 1),
+							},
+						}),
+					]);
+
+					if (existingBudget) {
+						set.status = 409;
+						return {
+							message: "Budget already exists for the category for this date",
+						};
+					}
+
+					if (transactionUsingBudget) {
+						set.status = 400;
+						return {
+							message:
+								"Budget cannot be updated as it is being used in transactions",
+						};
+					}
+				}
+
+				const updatedBudget: typeof BudgetPatchTypes.static = {};
+				if (category) updatedBudget.category = category;
+				if (limit) updatedBudget.limit = limit;
+				if (month) updatedBudget.month = month;
+				if (year) updatedBudget.year = year;
+
+				await Promise.all([
+					BudgetModel.findOneAndUpdate(
+						{ _id: budgetId, userId: user.id },
+						updatedBudget,
+						{ new: true },
+					),
+
+					Redis.del(`budgets:${user.id}`),
+				]);
+
+				set.status = 200;
+				return { message: "Budget updated successfully" };
+			} catch (error) {
+				set.status = 500;
+				console.error(error);
+				return { message: "An internal server error occurred" };
+			}
+		},
+		{ body: BudgetPatchTypes, params: BudgetParamsTypes },
+	)
 
 	// Delete a budget by ID
 	.delete(
@@ -182,12 +287,14 @@ const BudgetRoutes = new Elysia({
 					};
 				}
 
-				await BudgetModel.findOneAndDelete({
-					_id: budgetId,
-					userId: user.id,
-				});
+				await Promise.all([
+					BudgetModel.findOneAndDelete({
+						_id: budgetId,
+						userId: user.id,
+					}),
 
-				await Redis.del(`budgets:${user.id}`);
+					Redis.del(`budgets:${user.id}`),
+				]);
 
 				set.status = 200;
 				return { message: "Budget deleted successfully" };

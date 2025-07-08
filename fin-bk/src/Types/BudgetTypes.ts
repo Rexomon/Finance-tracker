@@ -16,3 +16,5 @@ export const BudgetParamsTypes = t.Object({
 		error: "Invalid budget id",
 	}),
 });
+
+export const BudgetPatchTypes = t.Partial(BudgetTypes);

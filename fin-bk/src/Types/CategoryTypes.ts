@@ -17,6 +17,8 @@ export const CategoryParamsTypes = t.Object({
 	}),
 });
 
+export const CategoryPatchTypes = t.Partial(CategoryTypes);
+
 export const CategoryQueryTypes = t.Partial(t.Pick(CategoryTypes, ["type"]));
 
 export type CategoryQueryFilter = {

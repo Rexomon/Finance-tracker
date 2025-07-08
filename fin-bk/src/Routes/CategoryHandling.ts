@@ -7,6 +7,7 @@ import TransactionModel from "../Model/TransactionModel";
 import {
 	CategoryTypes,
 	CategoryQueryTypes,
+	CategoryPatchTypes,
 	CategoryParamsTypes,
 	type CategoryQueryFilter,
 } from "../Types/CategoryTypes";
@@ -236,7 +237,7 @@ const CategoryHandling = new Elysia({
 						_id: categoryId,
 					}),
 
-					// Check if the category is being used in transactions or budgets
+					// Check if the category is being used in transactions
 					TransactionModel.exists({
 						userId: user.id,
 						category: categoryId,
@@ -270,20 +271,6 @@ const CategoryHandling = new Elysia({
 					};
 				}
 
-				await CategoryModel.updateOne(
-					{
-						userId: user.id,
-						_id: categoryId,
-					},
-					{
-						categoryName: categoryName,
-						type: type,
-					},
-					{
-						new: true,
-					},
-				);
-
 				const cacheKeysToDelete = [
 					`categories:${user.id}`,
 					`categories:${user.id}:${currentCategory.type}`,
@@ -302,9 +289,25 @@ const CategoryHandling = new Elysia({
 					);
 				}
 
-				// Delete the cache for the updated category
-				await Redis.del(...cacheKeysToDelete);
+				const updatedCategory = {
+					categoryName,
+					type,
+				};
 
+				await Promise.all([
+					CategoryModel.updateOne(
+						{
+							userId: user.id,
+							_id: categoryId,
+						},
+						updatedCategory,
+						{
+							new: true,
+						},
+					),
+
+					Redis.del(...cacheKeysToDelete),
+				]);
 				set.status = 200;
 				return { message: "Category updated successfully" };
 			} catch (error) {
@@ -313,7 +316,7 @@ const CategoryHandling = new Elysia({
 				return { message: "An internal server error occurred" };
 			}
 		},
-		{ body: CategoryTypes, params: CategoryParamsTypes },
+		{ body: CategoryPatchTypes, params: CategoryParamsTypes },
 	);
 
 export default CategoryHandling;
