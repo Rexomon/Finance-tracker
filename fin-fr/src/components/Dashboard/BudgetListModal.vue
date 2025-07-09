@@ -78,18 +78,98 @@
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button @click="deleteBudget(budget._id)" :disabled="loading"
-                    class="text-red-600 hover:text-red-900 disabled:opacity-50">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                      </path>
-                    </svg>
-                  </button>
+                  <div class="flex items-center space-x-2">
+                    <button @click="startEditBudget(budget)" :disabled="loading"
+                      class="text-blue-600 hover:text-blue-900 disabled:opacity-50">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
+                        </path>
+                      </svg>
+                    </button>
+                    <button @click="deleteBudget(budget._id)" :disabled="loading"
+                      class="text-red-600 hover:text-red-900 disabled:opacity-50">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                        </path>
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Edit Budget Modal -->
+        <div v-if="showEditModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-60">
+          <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Edit Budget</h3>
+                <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                  </svg>
+                </button>
+              </div>
+
+              <form @submit.prevent="updateBudget" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <select v-model="editForm.category" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
+                    <option value="">Choose Category</option>
+                    <option v-for="category in categories" :key="category._id" :value="category._id">
+                      {{ category.categoryName }}
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Budget Limit</label>
+                  <input v-model.number="editForm.limit" type="number" required min="1"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+                    placeholder="Enter budget limit" />
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Month</label>
+                  <select v-model="editForm.month" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
+                    <option value="">Choose Month</option>
+                    <option v-for="month in months" :key="month.value" :value="month.value">
+                      {{ month.label }}
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                  <select v-model="editForm.year" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
+                    <option value="">Choose Year</option>
+                    <option v-for="year in years" :key="year" :value="year">
+                      {{ year }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-4">
+                  <button type="button" @click="cancelEdit"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    Cancel
+                  </button>
+                  <button type="submit" :disabled="loading"
+                    class="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50">
+                    {{ loading ? 'Updating...' : 'Update' }}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
 
         <div v-if="filteredBudgets.length === 0" class="text-center py-8">
@@ -134,19 +214,59 @@ interface Budget {
 	year: number;
 }
 
+interface Category {
+	_id: string;
+	categoryName: string;
+	type: string;
+}
+
 interface Props {
 	show: boolean;
 	budgets: Budget[];
+	categories: Category[];
 }
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
 	close: [];
 	"delete-budget": [budgetId: string];
+	"update-budget": [];
 }>();
 
 const loading = ref(false);
 const filterPeriod = ref<"current" | "all">("current");
+const showEditModal = ref(false);
+const editingBudgetId = ref<string>("");
+const editForm = ref({
+	category: "",
+	limit: 0,
+	month: 0,
+	year: 0,
+});
+
+const months = [
+	{ value: 1, label: "January" },
+	{ value: 2, label: "February" },
+	{ value: 3, label: "March" },
+	{ value: 4, label: "April" },
+	{ value: 5, label: "May" },
+	{ value: 6, label: "June" },
+	{ value: 7, label: "July" },
+	{ value: 8, label: "August" },
+	{ value: 9, label: "September" },
+	{ value: 10, label: "October" },
+	{ value: 11, label: "November" },
+	{ value: 12, label: "December" },
+];
+
+const years = computed(() => {
+	const currentYear = new Date().getFullYear();
+	const yearsArray = [];
+	for (let i = currentYear - 1; i <= currentYear + 5; i++) {
+		yearsArray.push(i);
+	}
+	return yearsArray;
+});
 
 const filteredBudgets = computed(() => {
 	if (filterPeriod.value === "current") {
@@ -198,6 +318,61 @@ const deleteBudget = async (budgetId: string) => {
 	} catch (error) {
 		console.error("Error deleting budget:", error);
 		showErrorToast("An error occurred while deleting budget");
+	} finally {
+		loading.value = false;
+	}
+};
+
+const startEditBudget = (budget: Budget) => {
+	editingBudgetId.value = budget._id;
+	editForm.value = {
+		category: budget.category._id,
+		limit: budget.limit,
+		month: budget.month,
+		year: budget.year,
+	};
+	showEditModal.value = true;
+};
+
+const cancelEdit = () => {
+	showEditModal.value = false;
+	editingBudgetId.value = "";
+	editForm.value = {
+		category: "",
+		limit: 0,
+		month: 0,
+		year: 0,
+	};
+};
+
+const updateBudget = async () => {
+	loading.value = true;
+
+	try {
+		const response = await fetchWithAuth(
+			`${import.meta.env.VITE_BACKEND_URL}/v1/budgets/${editingBudgetId.value}`,
+			{
+				method: "PATCH",
+				body: JSON.stringify({
+					category: editForm.value.category,
+					limit: editForm.value.limit,
+					month: editForm.value.month,
+					year: editForm.value.year,
+				}),
+			},
+		);
+
+		if (response.ok) {
+			cancelEdit();
+			emit("update-budget");
+			showSuccessToast("Budget updated successfully");
+		} else {
+			const error = await response.json();
+			showErrorToast(error.message || "Failed to update budget");
+		}
+	} catch (error) {
+		console.error("Error updating budget:", error);
+		showErrorToast("An error occurred while updating budget");
 	} finally {
 		loading.value = false;
 	}

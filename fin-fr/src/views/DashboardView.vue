@@ -346,7 +346,7 @@
 
     <!-- Budget List Modal -->
     <BudgetListModal :show="showBudgetListModal" @close="closeBudgetListModal" @delete-budget="onDeleteBudget"
-      :budgets="allBudgets" />
+      @update-budget="onUpdateBudget" :budgets="allBudgets" :categories="expenseCategories" />
   </div>
 </template>
 
@@ -775,6 +775,10 @@ const onBudgetAdded = async () => {
 };
 
 const onDeleteBudget = async () => {
+	await fetchBudgets();
+};
+
+const onUpdateBudget = async () => {
 	await fetchBudgets();
 };
 

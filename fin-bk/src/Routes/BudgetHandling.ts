@@ -161,7 +161,6 @@ const BudgetRoutes = new Elysia({
 					_id: budgetId,
 					userId: user.id,
 				});
-
 				if (!currentBudget) {
 					set.status = 404;
 					return { message: "Budget not found" };
