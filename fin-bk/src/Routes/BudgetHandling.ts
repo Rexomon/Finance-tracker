@@ -9,34 +9,25 @@ import {
 	BudgetParamsTypes,
 	BudgetPatchTypes,
 } from "../Types/BudgetTypes";
+import { RedisLock } from "../Utils/RedisLocking";
 
 const BudgetRoutes = new Elysia({
 	prefix: "/budgets",
 	detail: { tags: ["Budget"] },
 })
 	.use(Auth)
+	.use(RedisLock)
 	// ==Authenticated routes==
 	// Create a new budget
 	.post(
 		"/",
-		async ({ set, user, body }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
+		async ({ set, body, user, lock }) => {
 			try {
 				const { category, limit, month, year } = body;
 
-				const lockKey = `lock:CreateBudget:${user.id}:${category}:${month}:${year}`;
+				const lockKey = `CreateBudget:${user.id}:${category}:${month}:${year}`;
 
-				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
-				if (!lockAcquired) {
-					set.status = 429;
-					return {
-						message: "Too many requests, please wait a moment and try again",
-					};
-				}
+				await lock.acquire(lockKey);
 
 				const [existingCategory, existingBudget] = await Promise.all([
 					CategoryModel.exists({
@@ -80,6 +71,16 @@ const BudgetRoutes = new Elysia({
 				set.status = 201;
 				return { message: "Budget created successfully" };
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };
@@ -90,11 +91,6 @@ const BudgetRoutes = new Elysia({
 
 	// Get all budgets for a user
 	.get("/", async ({ set, user }) => {
-		if (!user) {
-			set.status = 401;
-			return { message: "Unauthorized" };
-		}
-
 		try {
 			const cacheKey = `budgets:${user.id}`;
 
@@ -138,24 +134,13 @@ const BudgetRoutes = new Elysia({
 	// Update a budget by ID
 	.patch(
 		"/:budgetId",
-		async ({ set, user, body, params: { budgetId } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
-			const lockKey = `lock:UpdateBudget:${budgetId}:${user.id}`;
-
-			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
-			if (!lockAcquired) {
-				set.status = 429;
-				return {
-					message: "Too many requests, please wait a moment and try again",
-				};
-			}
-
+		async ({ set, body, user, lock, params: { budgetId } }) => {
 			try {
 				const { category, limit, month, year } = body;
+
+				const lockKey = `UpdateBudget:${budgetId}:${user.id}`;
+
+				await lock.acquire(lockKey);
 
 				const currentBudget = await BudgetModel.findOne({
 					_id: budgetId,
@@ -230,6 +215,16 @@ const BudgetRoutes = new Elysia({
 				set.status = 200;
 				return { message: "Budget updated successfully" };
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };
@@ -241,23 +236,12 @@ const BudgetRoutes = new Elysia({
 	// Delete a budget by ID
 	.delete(
 		"/:budgetId",
-		async ({ set, user, params: { budgetId } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
-			const lockKey = `lock:DeleteBudget:${budgetId}:${user.id}`;
-
-			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
-			if (!lockAcquired) {
-				set.status = 429;
-				return {
-					message: "Too many requests, please wait a moment and try again",
-				};
-			}
-
+		async ({ set, user, lock, params: { budgetId } }) => {
 			try {
+				const lockKey = `DeleteBudget:${budgetId}:${user.id}`;
+
+				await lock.acquire(lockKey);
+
 				const existingBudget = await BudgetModel.findOne(
 					{
 						_id: budgetId,
@@ -298,10 +282,16 @@ const BudgetRoutes = new Elysia({
 				set.status = 200;
 				return { message: "Budget deleted successfully" };
 			} catch (error) {
-				if (error instanceof Error && error.name === "CastError") {
-					set.status = 400;
-					return { message: "Invalid budget id" };
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
 				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };

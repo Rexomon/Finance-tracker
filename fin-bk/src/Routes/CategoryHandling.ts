@@ -11,34 +11,25 @@ import {
 	CategoryParamsTypes,
 	type CategoryQueryFilter,
 } from "../Types/CategoryTypes";
+import { RedisLock } from "../Utils/RedisLocking";
 
 const CategoryHandling = new Elysia({
 	prefix: "/categories",
 	detail: { tags: ["Category"] },
 })
 	.use(Auth)
+	.use(RedisLock)
 	// ==Authenticated Routes==
 	// Create a new category for the authenticated user
 	.post(
 		"/",
-		async ({ set, body, user }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
+		async ({ set, body, user, lock }) => {
 			try {
 				const { categoryName, type } = body;
 
-				const lockKey = `lock:CreateCategory:${user.id}:${categoryName}:${type}`;
+				const lockKey = `CreateCategory:${user.id}:${categoryName}:${type}`;
 
-				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
-				if (!lockAcquired) {
-					set.status = 429;
-					return {
-						message: "Too many requests, please wait a moment and try again",
-					};
-				}
+				await lock.acquire(lockKey);
 
 				const createNewCategory = {
 					userId: user.id,
@@ -65,6 +56,16 @@ const CategoryHandling = new Elysia({
 				set.status = 201;
 				return { message: "Category created successfully" };
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };
@@ -77,11 +78,6 @@ const CategoryHandling = new Elysia({
 	.get(
 		"/",
 		async ({ set, user, query }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
 			try {
 				const { type } = query;
 
@@ -132,23 +128,12 @@ const CategoryHandling = new Elysia({
 	// Delete a category by ID
 	.delete(
 		"/:categoryId",
-		async ({ set, user, params: { categoryId } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
-			const lockKey = `lock:DeleteCategory:${user.id}:${categoryId}`;
-
-			const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
-			if (!lockAcquired) {
-				set.status = 429;
-				return {
-					message: "Too many requests, please wait a moment and try again",
-				};
-			}
-
+		async ({ set, user, lock, params: { categoryId } }) => {
 			try {
+				const lockKey = `DeleteCategory:${user.id}:${categoryId}`;
+
+				await lock.acquire(lockKey);
+
 				const [transactionUsingCategory, budgetUsingCategory] =
 					await Promise.all([
 						TransactionModel.exists({
@@ -187,6 +172,16 @@ const CategoryHandling = new Elysia({
 				set.status = 200;
 				return { message: "Category deleted successfully" };
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };
@@ -198,24 +193,13 @@ const CategoryHandling = new Elysia({
 	// Update a category by ID
 	.patch(
 		"/:categoryId",
-		async ({ set, body, user, params: { categoryId } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
-			const lockKey = `lock:UpdateCategory:${user.id}:${categoryId}`;
-
-			const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
-			if (!lockAcquired) {
-				set.status = 429;
-				return {
-					message: "Too many requests, please wait a moment and try again",
-				};
-			}
-
+		async ({ set, body, user, lock, params: { categoryId } }) => {
 			try {
 				const { categoryName, type } = body;
+
+				const lockKey = `UpdateCategory:${user.id}:${categoryId}`;
+
+				await lock.acquire(lockKey);
 
 				const [
 					existingCategory,
@@ -311,6 +295,16 @@ const CategoryHandling = new Elysia({
 				set.status = 200;
 				return { message: "Category updated successfully" };
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };

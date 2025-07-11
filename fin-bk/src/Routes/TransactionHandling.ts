@@ -8,24 +8,25 @@ import {
 	TransactionsTypes,
 	TransactionParamsTypes,
 } from "../Types/TransactionsTypes";
+import { RedisLock } from "../Utils/RedisLocking";
 
 const TransactionRoutes = new Elysia({
 	prefix: "/transactions",
 	detail: { tags: ["Transaction"] },
 })
 	.use(Auth)
+	.use(RedisLock)
 	// ==Authenticated routes==
 	// Create a new transaction
 	.post(
 		"/",
-		async ({ set, body, user }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
+		async ({ set, body, user, lock }) => {
 			try {
 				const { amount, category, type, description, date } = body;
+
+				const lockKey = `CreateTransaction:${user.id}:${category}:${type}:${date}`;
+
+				await lock.acquire(lockKey);
 
 				const existingCategory = await CategoryModel.exists({
 					userId: user.id,
@@ -34,16 +35,6 @@ const TransactionRoutes = new Elysia({
 				if (!existingCategory) {
 					set.status = 404;
 					return { message: "Category not found" };
-				}
-
-				const lockKey = `lock:CreateTransaction:${user.id}:${category}:${type}:${date}`;
-
-				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
-				if (!lockAcquired) {
-					set.status = 429;
-					return {
-						message: "Too many requests, please wait a moment and try again",
-					};
 				}
 
 				// Deduct budget limit if the transaction is an expense
@@ -110,6 +101,16 @@ const TransactionRoutes = new Elysia({
 				set.status = 201;
 				return { message: "Transaction created" };
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };
@@ -120,11 +121,6 @@ const TransactionRoutes = new Elysia({
 
 	// Get all transactions for a user
 	.get("/", async ({ set, user }) => {
-		if (!user) {
-			set.status = 401;
-			return { message: "Unauthorized" };
-		}
-
 		try {
 			const cacheKey = `transactions:${user.id}`;
 
@@ -169,23 +165,12 @@ const TransactionRoutes = new Elysia({
 	// Update a transaction by ID
 	.put(
 		"/:transactionId",
-		async ({ set, body, user, params: { transactionId } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
-			const lockKey = `lock:UpdateTransaction:${user.id}:${transactionId}`;
-
-			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
-			if (!lockAcquired) {
-				set.status = 429;
-				return {
-					message: "Too many requests, please wait a moment and try again",
-				};
-			}
-
+		async ({ set, body, user, lock, params: { transactionId } }) => {
 			try {
+				const lockKey = `UpdateTransaction:${user.id}:${transactionId}`;
+
+				await lock.acquire(lockKey);
+
 				const { amount, category, type, description, date } = body;
 
 				const existingTransaction = await TransactionModel.findOne({
@@ -283,9 +268,14 @@ const TransactionRoutes = new Elysia({
 				set.status = 200;
 				return { message: "Transaction updated" };
 			} catch (error) {
-				if (error instanceof Error && error.name === "CastError") {
-					set.status = 400;
-					return { message: "Invalid transaction id" };
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
 				}
 
 				set.status = 500;
@@ -299,13 +289,12 @@ const TransactionRoutes = new Elysia({
 	// Delete a transaction by ID
 	.delete(
 		"/:transactionId",
-		async ({ set, user, params: { transactionId } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
+		async ({ set, user, lock, params: { transactionId } }) => {
 			try {
+				const lockKey = `DeleteTransaction:${user.id}:${transactionId}`;
+
+				await lock.acquire(lockKey);
+
 				const existingTransaction = await TransactionModel.findOne({
 					userId: user.id,
 					_id: transactionId,
@@ -355,9 +344,14 @@ const TransactionRoutes = new Elysia({
 				set.status = 200;
 				return { message: "Transaction deleted" };
 			} catch (error) {
-				if (error instanceof Error && error.name === "CastError") {
-					set.status = 400;
-					return { message: "Invalid transaction id" };
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
 				}
 
 				set.status = 500;

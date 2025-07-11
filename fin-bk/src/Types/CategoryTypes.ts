@@ -21,6 +21,9 @@ export const CategoryPatchTypes = t.Partial(CategoryTypes);
 
 export const CategoryQueryTypes = t.Partial(t.Pick(CategoryTypes, ["type"]));
 
-export type CategoryQueryFilter = {
-	userId: string | number;
-} & typeof CategoryQueryTypes.static;
+const categoryQueryFilter = t.Object({
+	userId: t.Union([t.String(), t.Number()]),
+});
+
+export type CategoryQueryFilter = typeof categoryQueryFilter.static &
+	typeof CategoryQueryTypes.static;

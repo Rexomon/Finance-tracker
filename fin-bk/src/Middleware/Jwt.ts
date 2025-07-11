@@ -1,7 +1,7 @@
 import jwt from "@elysiajs/jwt";
 
-const accessTokenSecret: string = Bun.env.JWT_ACCESS_TOKEN_SECRET as string;
-const refreshTokenSecret: string = Bun.env.JWT_REFRESH_TOKEN_SECRET as string;
+const accessTokenSecret = Bun.env.JWT_ACCESS_TOKEN_SECRET as string;
+const refreshTokenSecret = Bun.env.JWT_REFRESH_TOKEN_SECRET as string;
 
 if (!accessTokenSecret) {
 	console.error("JWT_ACCESS_TOKEN_SECRET environment variable is not set");

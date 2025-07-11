@@ -2,13 +2,14 @@ import { Elysia } from "elysia";
 import Redis from "../Config/Redis";
 import Auth from "../Middleware/Auth";
 import UserModel from "../Model/UserModel";
+import { RedisLock } from "../Utils/RedisLocking";
 import { JwtAccessToken, JwtRefreshToken } from "../Middleware/Jwt";
 import { UserLoginTypes, UserRegisterTypes } from "../Types/UserTypes";
 
 const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 	.use(JwtAccessToken())
 	.use(JwtRefreshToken())
-
+	.use(RedisLock)
 	// Login route by email and password
 	.post(
 		"/login",
@@ -93,19 +94,13 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 	// Register a new user
 	.post(
 		"/register",
-		async ({ set, body }) => {
+		async ({ set, body, lock }) => {
 			try {
 				const { name, email, password } = body;
 
-				const lockKey = `lock:UserRegister:${email}`;
+				const lockKey = `UserRegister:${email}`;
 
-				const lockAcquired = await Redis.set(lockKey, "1", "EX", 10, "NX");
-				if (!lockAcquired) {
-					set.status = 429;
-					return {
-						message: "Too many requests, please wait a moment and try again",
-					};
-				}
+				await lock.acquire(lockKey);
 
 				const existingUser = await UserModel.findOne({
 					$or: [{ name: name }, { email: email }],
@@ -141,6 +136,16 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 					user: { name: newUser.name, email: newUser.email },
 				};
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };
@@ -154,6 +159,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 		"/refresh",
 		async ({
 			set,
+			lock,
 			cookie: { AccessToken, RefreshToken },
 			JwtAccessToken,
 			JwtRefreshToken,
@@ -169,18 +175,10 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 				return { message: "Unauthorized" };
 			}
 
-			const lockKey = `lock:RefreshToken:${decodedToken.id}`;
-
-			const lockAcquired = await Redis.set(lockKey, "1", "EX", 5, "NX");
-			if (!lockAcquired) {
-				set.status = 429;
-				return {
-					message: "Too many requests, please wait a moment and try again",
-				};
-			}
-
 			try {
 				const cacheKey = `RefreshToken:${decodedToken.id}`;
+
+				await lock.acquire(cacheKey);
 
 				const [RedisRefreshToken, user] = await Promise.all([
 					Redis.get(cacheKey),
@@ -237,6 +235,16 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 				set.status = 200;
 				return { message: "Refresh token success" };
 			} catch (error) {
+				if (
+					error instanceof Error &&
+					error.message.includes("Too many requests")
+				) {
+					set.status = 429;
+					return {
+						message: "Too many requests, please wait a moment and try again",
+					};
+				}
+
 				set.status = 500;
 				console.error(error);
 				return { message: "An internal server error occurred" };
@@ -250,11 +258,6 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 	.post(
 		"/logout",
 		async ({ set, user, cookie: { AccessToken, RefreshToken } }) => {
-			if (!user) {
-				set.status = 401;
-				return { message: "Unauthorized" };
-			}
-
 			AccessToken.remove();
 			RefreshToken.remove();
 
@@ -267,11 +270,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
 
 	// Get authenticated user
 	.get("/profile", async ({ set, user }) => {
-		if (!user) {
-			set.status = 401;
-			return { message: "Unauthorized" };
-		}
-
+		set.status = 200;
 		return { user };
 	});
 
