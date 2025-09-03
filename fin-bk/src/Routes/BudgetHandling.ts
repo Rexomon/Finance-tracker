@@ -250,7 +250,7 @@ const BudgetRoutes = new Elysia({
   // Delete a budget by ID
   .delete(
     "/:budgetId",
-    async ({ set, user, lock, params: budgetId }) => {
+    async ({ set, user, lock, params: { budgetId } }) => {
       try {
         const lockKey = `DeleteBudget:${budgetId}:${user.id}`;
 

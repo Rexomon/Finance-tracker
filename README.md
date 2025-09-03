@@ -25,16 +25,60 @@ A financial tracking application built with Bun, Elysia, and Vue.
 git clone https://github.com/Rexomon/Finance-tracker.git
 ```
 
-2. Set up and run backend
+### Backend setup
+
+1. Navigate to the backend directory:
 ```bash
 cd fin-bk
-bun install
-bun dev
 ```
 
-3. Set up and run frontend
+2. Install dependencies:
+```bash
+bun install
+```
+
+3. Configure environtment variables:
+```bash
+cp .env.example .env
+```
+
+4. Run the development server:
+```bash
+bun run dev
+```
+
+5. Run the build command and start:
+```bash
+bun run build
+
+bun run start
+```
+
+### Frontend setup
+
+1. Navigate to the backend directory:
 ```bash
 cd fin-fr
+```
+
+2. Install dependencies:
+```bash
 bun install
-bun dev
+```
+
+3. Configure environtment variables:
+```bash
+cp .env.example .env
+```
+
+4. Run the development server:
+```bash
+bun run dev
+```
+
+5. Run the build command and start:
+```bash
+bun run build
+
+bun run start
 ```

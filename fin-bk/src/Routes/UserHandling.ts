@@ -23,7 +23,9 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
       try {
         const { email, password } = body;
 
-        const user = await UserModel.findOne({ email: email }).select("+password");
+        const user = await UserModel.findOne({ email: email }).select(
+          "+password",
+        );
         if (!user) {
           set.status = 401;
           return { message: "Email or password is incorrect" };
