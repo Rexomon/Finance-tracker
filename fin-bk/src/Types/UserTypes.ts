@@ -14,9 +14,12 @@ export const UserRegisterTypes = t.Object({
   }),
 });
 
-export const UserLoginTypes = t.Intersect([
-  t.Pick(UserRegisterTypes, ["email"]),
-  t.Object({
-    password: t.String({ minLength: 1, error: "Password is required" }),
-  }),
-]);
+export const UserLoginTypes = t.Pick(UserRegisterTypes, ["email", "password"]);
+
+const AuthUserStateTypes = t.Object({
+  id: t.String(),
+  email: t.String(),
+  iat: t.Number(),
+});
+
+export type AuthUserStateTypes = typeof AuthUserStateTypes.static;

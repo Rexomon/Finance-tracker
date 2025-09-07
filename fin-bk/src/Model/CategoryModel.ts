@@ -6,10 +6,12 @@ const CategorySchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      immutable: true,
     },
 
     categoryName: {
       type: String,
+      trim: true,
       required: true,
     },
 
@@ -17,6 +19,7 @@ const CategorySchema = new mongoose.Schema(
       type: String,
       required: true,
       enum: ["income", "expense"],
+      lowercase: true,
     },
   },
   {

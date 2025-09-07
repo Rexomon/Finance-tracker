@@ -39,8 +39,9 @@ const TransactionRoutes = new Elysia({
 
         // Deduct budget limit if the transaction is an expense
         if (type === "expense") {
-          const month = new Date(date).getMonth() + 1;
-          const year = new Date(date).getFullYear();
+          const d = new Date(date);
+          const month = d.getMonth() + 1;
+          const year = d.getFullYear();
 
           const [existingBudget, newBudgetLimit] = await Promise.all([
             BudgetModel.exists({

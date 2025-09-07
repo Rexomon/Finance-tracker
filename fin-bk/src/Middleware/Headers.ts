@@ -2,7 +2,6 @@ import { Elysia } from "elysia";
 
 const Headers = new Elysia().onRequest(({ set }) => {
   set.headers = {
-    "x-xss-protection": "1; mode=block",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
     "content-security-policy": "default-src 'self'",

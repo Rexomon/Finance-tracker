@@ -5,6 +5,7 @@ import UserRoutes from "./Routes/UserHandling";
 import BudgetRoutes from "./Routes/BudgetHandling";
 import CategoryRoutes from "./Routes/CategoryHandling";
 import TransactionRoutes from "./Routes/TransactionHandling";
+import { rateLimit } from "elysia-rate-limit";
 import { safelyCloseRedis } from "./Config/Redis";
 import {
   connectToDatabase,
@@ -24,7 +25,58 @@ if (nodeEnv === "production" && !corsDomainOrigin) {
 }
 
 // Elysia server initialization and configuration
-const mainApp = new Elysia();
+const mainApp = new Elysia()
+  .onError(({ error, code, status }) => {
+    const isProd = nodeEnv === "production";
+
+    if (code === "VALIDATION") {
+      const message = isProd
+        ? { message: "Invalid request payload" }
+        : { error: error.message };
+
+      return status(400, message);
+    }
+
+    if (code === "NOT_FOUND") {
+      return status(404, { message: "Not found :(" });
+    }
+
+    if (code === "INTERNAL_SERVER_ERROR") {
+      const message = isProd
+        ? { message: "Internal server error" }
+        : { error: error.message };
+
+      return status(500, message);
+    }
+  })
+  .use(
+    rateLimit({
+      duration: 15000,
+      max: 7,
+      errorResponse: new Response(
+        JSON.stringify({
+          message: "Too many requests, please try again later",
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    }),
+  )
+  .use(
+    cors({
+      origin: corsDomainOrigin || "*",
+      credentials: Boolean(corsDomainOrigin),
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      preflight: true,
+      maxAge: 86400,
+    }),
+  )
+  .all("*", ({ status }) => {
+    return status(404, { message: "Not found :(" });
+  });
 
 if (nodeEnv !== "production") {
   mainApp.use(
@@ -50,18 +102,8 @@ if (nodeEnv !== "production") {
 const apiApp = new Elysia({ prefix: "/v1" });
 
 apiApp
-  .use(
-    cors({
-      origin: corsDomainOrigin || "*",
-      credentials: Boolean(corsDomainOrigin),
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-      preflight: true,
-      maxAge: 86400,
-    }),
-  )
-  .get("/", async () => {
-    return { message: "Hello, There!" };
+  .get("/health", async () => {
+    return { status: "ok" };
   })
   .use(UserRoutes)
   .use(BudgetRoutes)
@@ -95,8 +137,8 @@ const shutdownService = async (signal: string) => {
 };
 
 const closeSignals = ["SIGINT", "SIGTERM", "SIGQUIT"];
-for (const SignalType of closeSignals) {
-  process.on(SignalType, async () => {
-    shutdownService(SignalType);
+for (const signalType of closeSignals) {
+  process.on(signalType, () => {
+    void shutdownService(signalType);
   });
 }

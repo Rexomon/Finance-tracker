@@ -27,8 +27,13 @@ export const connectToDatabase = async () => {
 
 export const safelyCloseMongoDB = async () => {
   try {
-    await mongoose.connection.close();
-    console.log("MongoDB connection closed safely.");
+    // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect();
+      console.log("MongoDB connection closed safely.");
+    } else {
+      console.log("MongoDB connection already closed.");
+    }
   } catch (error) {
     console.error("Error closing MongoDB connection:", error);
   }

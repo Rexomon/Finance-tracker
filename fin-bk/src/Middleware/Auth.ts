@@ -2,10 +2,11 @@ import Elysia from "elysia";
 import Redis from "../Config/Redis";
 import UserModel from "../Model/UserModel";
 import { JwtAccessToken } from "./Jwt";
+import type { AuthUserStateTypes } from "../Types/UserTypes";
 
 const Auth = new Elysia()
   .use(JwtAccessToken())
-  .state("user", { id: "", email: "", iat: 0 })
+  .state("user", { id: "", email: "", iat: 0 } as AuthUserStateTypes)
   .onBeforeHandle(
     async ({
       set,
@@ -48,7 +49,7 @@ const Auth = new Elysia()
           id: decoded.id,
           email: decoded.email,
           iat: decoded.iat,
-        } as typeof store.user;
+        } as AuthUserStateTypes;
       } catch (error) {
         set.status = 500;
         console.error(error);

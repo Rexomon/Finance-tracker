@@ -1,5 +1,10 @@
 import { t } from "elysia";
 
+const ObjectId = t.String({
+  pattern: "^[a-fA-F0-9]{24}$",
+  error: "Invalid id format",
+});
+
 export const CategoryTypes = t.Object({
   categoryName: t.String({
     minLength: 3,
@@ -12,10 +17,7 @@ export const CategoryTypes = t.Object({
 });
 
 export const CategoryParamsTypes = t.Object({
-  categoryId: t.String({
-    pattern: "^[a-fA-F0-9]{24}$",
-    error: "Invalid category id",
-  }),
+  categoryId: ObjectId,
 });
 
 export const CategoryPatchTypes = t.Partial(CategoryTypes);
@@ -23,10 +25,7 @@ export const CategoryPatchTypes = t.Partial(CategoryTypes);
 export const CategoryQueryTypes = t.Partial(t.Pick(CategoryTypes, ["type"]));
 
 const categoryQueryFilter = t.Object({
-  userId: t.String({
-    pattern: "^[a-fA-F0-9]{24}$",
-    error: "Invalid user id",
-  }),
+  userId: ObjectId,
 });
 
 export type CategoryQueryFilter = typeof categoryQueryFilter.static &

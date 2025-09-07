@@ -107,7 +107,7 @@ const BudgetRoutes = new Elysia({
           __v: 0,
         },
       )
-        .sort({ month: -1 })
+        .sort({ year: -1, month: -1 })
         .populate("category", {
           userId: 0,
           createdAt: 0,

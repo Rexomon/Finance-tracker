@@ -10,6 +10,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
   .use(JwtAccessToken())
   .use(JwtRefreshToken())
   .use(RedisLock)
+
   // Login route by email and password
   .post(
     "/login",
@@ -80,6 +81,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
         );
 
         set.status = 200;
+        set.headers["content-type"] = "application/json";
         return { message: "Login success" };
       } catch (error) {
         set.status = 500;
@@ -229,6 +231,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
         await Redis.set(cacheKey, UserRefreshToken, "EX", refreshTokenExpiry);
 
         set.status = 200;
+        set.headers["content-type"] = "application/json";
         return { message: "Refresh token success" };
       } catch (error) {
         if (
@@ -260,6 +263,7 @@ const UserRoutes = new Elysia({ prefix: "/users", detail: { tags: ["User"] } })
       await Redis.del(`RefreshToken:${user.id}`);
 
       set.status = 200;
+      set.headers["content-type"] = "application/json";
       return { message: "Logout success" };
     },
   )

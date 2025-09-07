@@ -6,6 +6,7 @@ const BudgetSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      immutable: true,
     },
 
     category: {
@@ -38,7 +39,7 @@ const BudgetSchema = new mongoose.Schema(
 );
 
 BudgetSchema.index(
-  { userId: 1, month: 1, year: 1, category: 1 },
+  { userId: 1, category: 1, month: 1, year: 1 },
   { unique: true },
 );
 

@@ -111,7 +111,7 @@ const CategoryHandling = new Elysia({
           cacheKey,
           JSON.stringify(userCategoriesList),
           "EX",
-          60 * 30,
+          1800,
         );
 
         set.status = 200;
