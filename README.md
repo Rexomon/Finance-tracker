@@ -37,7 +37,7 @@ cd fin-bk
 bun install
 ```
 
-3. Configure environtment variables:
+3. Configure environment variables:
 ```bash
 cp .env.example .env
 ```
@@ -56,7 +56,7 @@ bun run start
 
 ### Frontend setup
 
-1. Navigate to the backend directory:
+1. Navigate to the frontend directory:
 ```bash
 cd fin-fr
 ```
@@ -66,7 +66,7 @@ cd fin-fr
 bun install
 ```
 
-3. Configure environtment variables:
+3. Configure environment variables:
 ```bash
 cp .env.example .env
 ```
