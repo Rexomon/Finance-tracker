@@ -107,7 +107,7 @@ const BudgetRoutes = new Elysia({
           __v: 0,
         },
       )
-        .sort({ year: -1, month: -1 })
+        .sort({ month: -1, year: -1 })
         .populate("category", {
           userId: 0,
           createdAt: 0,
@@ -152,7 +152,7 @@ const BudgetRoutes = new Elysia({
         }
 
         // Check if any of category, month, or year is being changed
-        //
+        // and the value is different from the current one
         const hasCategoryChanged =
           category && currentBudget.category.toString() !== category;
         const hasMonthChanged = month && currentBudget.month !== month;

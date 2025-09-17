@@ -38,7 +38,6 @@ const TransactionSchema = new mongoose.Schema(
 
     date: {
       type: Date,
-      required: true,
       default: Date.now,
     },
   },
@@ -54,8 +53,6 @@ TransactionSchema.index({ userId: 1, category: 1, date: 1 });
 // Index for user-scoped date range/sort queries
 TransactionSchema.index({ userId: 1, date: -1 });
 
-// Index for reporting/dashboard queries filtered by type and date
-TransactionSchema.index({ userId: 1, type: 1, date: -1 });
 
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
 export default TransactionModel;

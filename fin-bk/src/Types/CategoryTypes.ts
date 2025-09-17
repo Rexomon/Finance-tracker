@@ -8,6 +8,7 @@ const ObjectId = t.String({
 export const CategoryTypes = t.Object({
   categoryName: t.String({
     minLength: 3,
+    maxLength: 64,
     pattern: "^\\S(?:.*\\S)?$",
     error: "Category name must be at least 3 characters long",
   }),

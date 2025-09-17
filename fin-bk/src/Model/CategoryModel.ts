@@ -11,6 +11,8 @@ const CategorySchema = new mongoose.Schema(
 
     categoryName: {
       type: String,
+      minLength: 3,
+      maxLength: 64,
       trim: true,
       required: true,
     },

@@ -6,7 +6,7 @@ export function JwtAccessToken(secret = Bun.env.JWT_ACCESS_TOKEN_SECRET) {
   }
   return jwt({
     name: "JwtAccessToken",
-    secret: secret as string,
+    secret: secret,
     exp: "30m",
   });
 }
@@ -17,7 +17,7 @@ export function JwtRefreshToken(secret = Bun.env.JWT_REFRESH_TOKEN_SECRET) {
   }
   return jwt({
     name: "JwtRefreshToken",
-    secret: secret as string,
+    secret: secret,
     exp: "7d",
   });
 }

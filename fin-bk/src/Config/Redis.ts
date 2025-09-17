@@ -10,7 +10,7 @@ const redis = new Redis(RedisUrl, {
   retryStrategy(times) {
     const MaxRetries = 3;
 
-    if (times >= MaxRetries) {
+    if (times > MaxRetries) {
       console.error("Max retries reached. Closing Redis connection.");
       return null;
     }

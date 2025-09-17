@@ -43,5 +43,7 @@ BudgetSchema.index(
   { unique: true },
 );
 
+BudgetSchema.index({ userId: 1, month: -1, year: -1 });
+
 const BudgetModel = mongoose.model("Budget", BudgetSchema);
 export default BudgetModel;
