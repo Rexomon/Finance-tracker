@@ -1,57 +1,32 @@
 import { Elysia } from "elysia";
+import { rateLimit } from "elysia-rate-limit";
+
 import cors from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
+
 import Headers from "./Middleware/Headers";
-import UserRoutes from "./Routes/UserHandling";
-import BudgetRoutes from "./Routes/BudgetHandling";
-import CategoryRoutes from "./Routes/CategoryHandling";
-import TransactionRoutes from "./Routes/TransactionHandling";
-import { rateLimit } from "elysia-rate-limit";
+
+import { apiRoutesV1 } from "./routes";
+import { getRealIp } from "./Utils/RealIp";
 import { safelyCloseRedis } from "./Config/Redis";
+
 import {
   connectToDatabase,
   safelyCloseMongoDB,
 } from "./Database/DatabaseConnection";
-import type { Server } from "bun";
 
 await connectToDatabase();
 
-// Ensure environment variables are set
 const port = Number(Bun.env.PORT);
 const nodeEnv = Bun.env.NODE_ENV;
 const corsDomainOrigin = Bun.env.DOMAIN_ORIGIN;
 
 if (nodeEnv === "production" && !corsDomainOrigin) {
-  console.error("CORS domain origin is not set");
-  process.exit(1);
+  throw new Error("CORS domain origin is not set");
 }
 
-// Function to get the real IP address of the client
-// This function checks for common headers set by proxies/CDNs (e.g., Cloudflare, Nginx)
-// and used as a generator for elysia rate limit middleware
-const getRealIp = (request: Request, server: Server | null): string => {
-  const cloudfareIp = request.headers.get("cf-connecting-ip");
-  if (cloudfareIp) return cloudfareIp;
-
-  const xForwardedFor = request.headers.get("x-forwarded-for");
-  if (xForwardedFor) return xForwardedFor.split(",")[0].trim();
-
-  const serverIp = server?.requestIP(request)?.address as string;
-  return serverIp || "unknown";
-};
-
 // Elysia server initialization and configuration
-const mainApp = new Elysia()
-  .use(
-    cors({
-      origin: corsDomainOrigin || "*",
-      credentials: Boolean(corsDomainOrigin),
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-      preflight: true,
-      maxAge: 86400,
-    }),
-  )
+const config = new Elysia({ name: "elysia-config" })
   .onError(({ error, code, status }) => {
     const isProd = nodeEnv === "production";
 
@@ -69,35 +44,47 @@ const mainApp = new Elysia()
 
     if (code === "INTERNAL_SERVER_ERROR") {
       const message = isProd
-        ? { message: "Internal server error" }
+        ? { message: "An internal server error occurred" }
         : { error: error };
 
       return status(500, message);
     }
+
+    if (isProd) console.error("Internal server error:", error);
   })
+  .use(
+    cors({
+      origin: corsDomainOrigin || "*",
+      credentials: Boolean(corsDomainOrigin),
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+      preflight: true,
+      maxAge: 86400,
+    }),
+  )
   .use(
     rateLimit({
       duration: 15000,
-      max: 7,
+      max: 10,
       generator: getRealIp,
-      errorResponse: new Response(
-        JSON.stringify({
-          message: "Too many requests, please try again later",
-        }),
+      errorResponse: Response.json(
+        {
+          message: "Too many requests, please wait a moment and try again",
+        },
         {
           status: 429,
-          headers: { "Content-Type": "application/json" },
         },
       ),
     }),
   )
-  .use(Headers)
   .all("*", ({ status }) => {
     return status(404, { message: "Not found :(" });
   });
 
-if (nodeEnv !== "production") {
-  mainApp.use(
+if (nodeEnv === "production") {
+  config.use(Headers);
+} else {
+  config.use(
     swagger({
       documentation: {
         info: {
@@ -117,19 +104,8 @@ if (nodeEnv !== "production") {
   );
 }
 
-const apiApp = new Elysia({ prefix: "/v1" });
-
-apiApp
-  .get("/health", async () => {
-    return { status: "ok" };
-  })
-  .use(UserRoutes)
-  .use(BudgetRoutes)
-  .use(CategoryRoutes)
-  .use(TransactionRoutes);
-
 // Server setup
-const app = mainApp.use(apiApp).listen(port);
+const app = new Elysia().use(config).use(apiRoutesV1).listen(port);
 
 console.log(
   `🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`,

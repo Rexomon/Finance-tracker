@@ -53,6 +53,5 @@ TransactionSchema.index({ userId: 1, category: 1, date: 1 });
 // Index for user-scoped date range/sort queries
 TransactionSchema.index({ userId: 1, date: -1 });
 
-
 const TransactionModel = mongoose.model("Transaction", TransactionSchema);
 export default TransactionModel;
