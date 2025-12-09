@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 
 const handleGetStarted = () => {
-	router.push("/signup");
+  router.push("/signup");
 };
 </script>
 
@@ -21,7 +21,6 @@ const handleGetStarted = () => {
       >
         Get Started for Free
       </button>
-      <p class="text-white/80 mt-4">No credit card required. Free 14-day trial.</p>
     </div>
   </section>
 </template>

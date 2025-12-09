@@ -4,7 +4,7 @@ import router from "@/router";
 import { useGlobalToast } from "@/composables/useGlobalToast";
 
 const { showSuccessToast, showErrorToast, showInfoToast, showWarnToast } =
-	useGlobalToast();
+  useGlobalToast();
 
 // Form state
 const name = ref("");
@@ -23,183 +23,183 @@ const confirmPasswordError = ref("");
 
 // Validation functions
 const validateName = (name: string) => {
-	if (!name) {
-		return "Username is required";
-	}
-	if (name.length < 3) {
-		return "Username must be at least 3 characters long";
-	}
-	if (name.length > 50) {
-		return "Username must be less than 50 characters";
-	}
-	return "";
+  if (!name) {
+    return "Username is required";
+  }
+  if (name.length < 3) {
+    return "Username must be at least 3 characters long";
+  }
+  if (name.length > 50) {
+    return "Username must be less than 50 characters";
+  }
+  return "";
 };
 
 const validateEmail = (email: string) => {
-	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-	if (!email) {
-		return "Email is required";
-	}
-	if (!emailRegex.test(email)) {
-		return "Please enter a valid email address";
-	}
-	return "";
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email) {
+    return "Email is required";
+  }
+  if (!emailRegex.test(email)) {
+    return "Please enter a valid email address";
+  }
+  return "";
 };
 
 const validatePassword = (password: string) => {
-	const passwordRegex =
-		/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  const passwordRegex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
-	if (!password) {
-		return "Password is required";
-	}
+  if (!password) {
+    return "Password is required";
+  }
 
-	if (!passwordRegex.test(password)) {
-		return "Password must be at least 8 characters, and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).";
-	}
+  if (!passwordRegex.test(password)) {
+    return "Password must be at least 8 characters, and include at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&).";
+  }
 
-	return "";
+  return "";
 };
 
 // Password validation checks for dropdown
 const getPasswordValidation = (password: string) => {
-	return {
-		length: password.length >= 8,
-		lowercase: /[a-z]/.test(password),
-		uppercase: /[A-Z]/.test(password),
-		number: /\d/.test(password),
-		special: /[@$!%*?&]/.test(password),
-	};
+  return {
+    length: password.length >= 8,
+    lowercase: /[a-z]/.test(password),
+    uppercase: /[A-Z]/.test(password),
+    number: /\d/.test(password),
+    special: /[@$!%*?&]/.test(password),
+  };
 };
 
 const showPasswordValidation = ref(false);
 
 const validateConfirmPassword = (password: string, confirmPassword: string) => {
-	if (!confirmPassword) {
-		return "Please confirm your password";
-	}
-	if (password !== confirmPassword) {
-		return "Passwords do not match";
-	}
-	return "";
+  if (!confirmPassword) {
+    return "Please confirm your password";
+  }
+  if (password !== confirmPassword) {
+    return "Passwords do not match";
+  }
+  return "";
 };
 
 // Form submission
 const handleSubmit = async () => {
-	// Reset errors
-	nameError.value = "";
-	emailError.value = "";
-	passwordError.value = "";
-	confirmPasswordError.value = "";
+  // Reset errors
+  nameError.value = "";
+  emailError.value = "";
+  passwordError.value = "";
+  confirmPasswordError.value = "";
 
-	// Validate form
-	nameError.value = validateName(name.value);
-	emailError.value = validateEmail(email.value);
-	passwordError.value = validatePassword(password.value);
-	confirmPasswordError.value = validateConfirmPassword(
-		password.value,
-		confirmPassword.value,
-	);
+  // Validate form
+  nameError.value = validateName(name.value);
+  emailError.value = validateEmail(email.value);
+  passwordError.value = validatePassword(password.value);
+  confirmPasswordError.value = validateConfirmPassword(
+    password.value,
+    confirmPassword.value,
+  );
 
-	// If there are errors, don't submit
-	if (
-		nameError.value ||
-		emailError.value ||
-		passwordError.value ||
-		confirmPasswordError.value
-	) {
-		return;
-	}
+  // If there are errors, don't submit
+  if (
+    nameError.value ||
+    emailError.value ||
+    passwordError.value ||
+    confirmPasswordError.value
+  ) {
+    return;
+  }
 
-	// Start loading
-	isLoading.value = true;
+  // Start loading
+  isLoading.value = true;
 
-	try {
-		// Make API call to backend
-		const response = await fetch(
-			`${import.meta.env.VITE_BACKEND_URL}/v1/users/register`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					name: name.value,
-					email: email.value,
-					password: password.value,
-				}),
-			},
-		);
+  try {
+    // Make API call to backend
+    const response = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/users/register`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name.value,
+          email: email.value,
+          password: password.value,
+        }),
+      },
+    );
 
-		if (!response.ok) {
-			const errorData = await response.json();
-			throw new Error(errorData.message || "Registration failed");
-		}
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Registration failed");
+    }
 
-		showSuccessToast("Registration successful");
+    showSuccessToast("Registration successful");
 
-		// Reset form
-		name.value = "";
-		email.value = "";
-		password.value = "";
-		confirmPassword.value = "";
+    // Reset form
+    name.value = "";
+    email.value = "";
+    password.value = "";
+    confirmPassword.value = "";
 
-		// You can redirect to login page here
-		router.push("/login");
-	} catch (error) {
-		const errorMessage =
-			error instanceof Error
-				? error.message
-				: "Registration failed. Please try again.";
-		showErrorToast(`Registration failed: ${errorMessage}`);
-	} finally {
-		isLoading.value = false;
-	}
+    // You can redirect to login page here
+    router.push("/login");
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Registration failed. Please try again.";
+    showErrorToast(`Registration failed: ${errorMessage}`);
+  } finally {
+    isLoading.value = false;
+  }
 };
 
 // Input handlers with real-time validation
 const handleNameInput = () => {
-	if (nameError.value) {
-		nameError.value = validateName(name.value);
-	}
+  if (nameError.value) {
+    nameError.value = validateName(name.value);
+  }
 };
 
 const handleEmailInput = () => {
-	if (emailError.value) {
-		emailError.value = validateEmail(email.value);
-	}
+  if (emailError.value) {
+    emailError.value = validateEmail(email.value);
+  }
 };
 
 const handlePasswordInput = () => {
-	if (passwordError.value) {
-		passwordError.value = validatePassword(password.value);
-	}
-	if (confirmPasswordError.value && confirmPassword.value) {
-		confirmPasswordError.value = validateConfirmPassword(
-			password.value,
-			confirmPassword.value,
-		);
-	}
+  if (passwordError.value) {
+    passwordError.value = validatePassword(password.value);
+  }
+  if (confirmPasswordError.value && confirmPassword.value) {
+    confirmPasswordError.value = validateConfirmPassword(
+      password.value,
+      confirmPassword.value,
+    );
+  }
 };
 
 const handlePasswordFocus = () => {
-	showPasswordValidation.value = true;
+  showPasswordValidation.value = true;
 };
 
 const handlePasswordBlur = () => {
-	// Hide validation dropdown after a short delay
-	setTimeout(() => {
-		showPasswordValidation.value = false;
-	}, 200);
+  // Hide validation dropdown after a short delay
+  setTimeout(() => {
+    showPasswordValidation.value = false;
+  }, 200);
 };
 
 const handleConfirmPasswordInput = () => {
-	if (confirmPasswordError.value) {
-		confirmPasswordError.value = validateConfirmPassword(
-			password.value,
-			confirmPassword.value,
-		);
-	}
+  if (confirmPasswordError.value) {
+    confirmPasswordError.value = validateConfirmPassword(
+      password.value,
+      confirmPassword.value,
+    );
+  }
 };
 </script>
 

@@ -1,29 +1,29 @@
 <script setup lang="ts">
 const features = [
-	{
-		title: "Expense Tracking",
-		description:
-			"Easily log your daily expenses and categorize them for better financial awareness.",
-		icon: "📊",
-	},
-	{
-		title: "Budget Management",
-		description:
-			"Create and manage budgets for different expense categories to stay on track.",
-		icon: "💰",
-	},
-	{
-		title: "Financial Reports",
-		description:
-			"Get insightful reports and visualizations of your spending habits over time.",
-		icon: "📈",
-	},
-	{
-		title: "Goal Setting",
-		description:
-			"Set savings goals and track your progress towards achieving them.",
-		icon: "🎯",
-	},
+  {
+    title: "Expense Tracking",
+    description:
+      "Easily log your daily expenses and categorize them for better financial awareness.",
+    icon: "📊",
+  },
+  {
+    title: "Budget Management",
+    description:
+      "Create and manage budgets for different expense categories to stay on track.",
+    icon: "💰",
+  },
+  {
+    title: "Financial Reports",
+    description:
+      "Get insightful reports and visualizations of your spending habits over time.",
+    icon: "📈",
+  },
+  {
+    title: "Goal Setting",
+    description:
+      "Set savings goals and track your progress towards achieving them.",
+    icon: "🎯",
+  },
 ];
 </script>
 

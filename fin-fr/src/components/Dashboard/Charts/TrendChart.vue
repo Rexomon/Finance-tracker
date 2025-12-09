@@ -70,39 +70,39 @@
 import { computed } from "vue";
 
 interface TrendData {
-	month: string;
-	income: number;
-	expense: number;
+  month: string;
+  income: number;
+  expense: number;
 }
 
 interface Props {
-	data: TrendData[];
+  data: TrendData[];
 }
 
 const props = defineProps<Props>();
 
 const maxValue = computed(() => {
-	const allValues = props.data.flatMap((item) => [item.income, item.expense]);
-	return Math.max(...allValues, 1);
+  const allValues = props.data.flatMap((item) => [item.income, item.expense]);
+  return Math.max(...allValues, 1);
 });
 
 const totalIncome = computed(() => {
-	return props.data.reduce((sum, item) => sum + item.income, 0);
+  return props.data.reduce((sum, item) => sum + item.income, 0);
 });
 
 const totalExpense = computed(() => {
-	return props.data.reduce((sum, item) => sum + item.expense, 0);
+  return props.data.reduce((sum, item) => sum + item.expense, 0);
 });
 
 const getBarHeight = (value: number, max: number) => {
-	return Math.max((value / max) * 160, 2); // Reduced max height to 160px for better fit
+  return Math.max((value / max) * 160, 2); // Reduced max height to 160px for better fit
 };
 
 const formatCurrency = (amount: number) => {
-	return new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-	}).format(amount);
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+  }).format(amount);
 };
 </script>
 

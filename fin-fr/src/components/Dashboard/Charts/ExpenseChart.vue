@@ -45,53 +45,53 @@
 import { computed } from "vue";
 
 interface ChartData {
-	name: string;
-	value: number;
+  name: string;
+  value: number;
 }
 
 interface Props {
-	data: ChartData[];
+  data: ChartData[];
 }
 
 const props = defineProps<Props>();
 
 const colors = [
-	"#3B82F6", // blue
-	"#EF4444", // red
-	"#10B981", // green
-	"#F59E0B", // yellow
-	"#8B5CF6", // purple
-	"#EC4899", // pink
-	"#06B6D4", // cyan
-	"#84CC16", // lime
-	"#F97316", // orange
-	"#6B7280", // gray
+  "#3B82F6", // blue
+  "#EF4444", // red
+  "#10B981", // green
+  "#F59E0B", // yellow
+  "#8B5CF6", // purple
+  "#EC4899", // pink
+  "#06B6D4", // cyan
+  "#84CC16", // lime
+  "#F97316", // orange
+  "#6B7280", // gray
 ];
 
 const totalValue = computed(() => {
-	return props.data.reduce((sum, item) => sum + item.value, 0);
+  return props.data.reduce((sum, item) => sum + item.value, 0);
 });
 
 const chartData = computed(() => {
-	return props.data.map((item) => ({
-		...item,
-		percentage: (item.value / totalValue.value) * 100,
-	}));
+  return props.data.map((item) => ({
+    ...item,
+    percentage: (item.value / totalValue.value) * 100,
+  }));
 });
 
 const calculateOffset = (index: number) => {
-	let offset = 0;
-	for (let i = 0; i < index; i++) {
-		offset += (chartData.value[i].percentage * 2 * Math.PI * 80) / 100;
-	}
-	return -offset;
+  let offset = 0;
+  for (let i = 0; i < index; i++) {
+    offset += (chartData.value[i].percentage * 2 * Math.PI * 80) / 100;
+  }
+  return -offset;
 };
 
 const formatCurrency = (amount: number) => {
-	return new Intl.NumberFormat("id-ID", {
-		style: "currency",
-		currency: "IDR",
-	}).format(amount);
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+  }).format(amount);
 };
 </script>
 
