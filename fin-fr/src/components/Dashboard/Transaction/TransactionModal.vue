@@ -209,7 +209,7 @@ const submitTransaction = async () => {
     const method = props.editMode ? "PUT" : "POST";
 
     // Convert date string to ISO format for backend
-    const dateValue = new Date(form.value.date);
+    const dateValue = new Date(form.value.date || new Date());
 
     const response = await fetchWithAuth(url, {
       method,
