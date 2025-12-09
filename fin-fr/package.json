@@ -1,33 +1,33 @@
 {
-	"name": "fin-fr",
-	"version": "0.0.0",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"dev": "vite",
-		"build": "run-p type-check \"build-only {@}\" --",
-		"preview": "vite preview",
-		"build-only": "vite build",
-		"type-check": "vue-tsc --build"
-	},
-	"dependencies": {
-		"@primevue/themes": "^4.3.6",
-		"@tailwindcss/vite": "^4.1.11",
-		"primevue": "^4.3.6",
-		"tailwindcss": "^4.1.11",
-		"vue": "^3.5.17",
-		"vue-router": "^4.5.1"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^2.1.1",
-		"@tsconfig/node22": "^22.0.2",
-		"@types/node": "^24.0.12",
-		"@vitejs/plugin-vue": "^6.0.0",
-		"@vue/tsconfig": "^0.7.0",
-		"npm-run-all2": "^8.0.4",
-		"typescript": "~5.8.3",
-		"vite": "^7.0.3",
-		"vite-plugin-vue-devtools": "^7.7.7",
-		"vue-tsc": "^3.0.1"
-	}
+  "name": "fin-fr",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "run-p type-check \"build-only {@}\" --",
+    "preview": "vite preview",
+    "build-only": "vite build",
+    "type-check": "vue-tsc --build"
+  },
+  "dependencies": {
+    "@primevue/themes": "^4.5.2",
+    "@tailwindcss/vite": "^4.1.17",
+    "primevue": "^4.5.2",
+    "tailwindcss": "^4.1.17",
+    "vue": "^3.5.25",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "@tsconfig/node22": "^22.0.5",
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^6.0.2",
+    "@vue/tsconfig": "^0.8.1",
+    "npm-run-all2": "^8.0.4",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.7",
+    "vite-plugin-vue-devtools": "^8.0.5",
+    "vue-tsc": "^3.1.7"
+  }
 }

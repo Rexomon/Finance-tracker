@@ -11,17 +11,17 @@ const app = createApp(App);
 
 app.use(router);
 app.use(PrimeVue, {
-	theme: {
-		preset: Nora,
-		options: {
-			prefix: "p",
-			darkModeSelector: "system",
-			cssLayer: {
-				name: "primevue",
-				order: "theme, base, primevue",
-			},
-		},
-	},
+  theme: {
+    preset: Nora,
+    options: {
+      prefix: "p",
+      darkModeSelector: "system",
+      cssLayer: {
+        name: "primevue",
+        order: "theme, base, primevue",
+      },
+    },
+  },
 });
 app.use(ToastService);
 
