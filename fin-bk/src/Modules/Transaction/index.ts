@@ -6,10 +6,11 @@ import { RedisLock } from "../../Utils/RedisLocking";
 import { handleError } from "../../Utils/ErrorHandling";
 
 import {
+  transactionList,
   transactionCreate,
   transactionDelete,
-  transactionList,
   transactionUpdate,
+  transactionSummary,
 } from "./service";
 
 import {
@@ -79,6 +80,23 @@ const TransactionRoutes = new Elysia({
     },
     { query: TransactionQuerySchema },
   )
+
+  .get("/summary", async ({ status, user }) => {
+    try {
+      const transactionResponse = await transactionSummary({ userId: user.id });
+
+      return status(transactionResponse.code, {
+        message: transactionResponse.message,
+        ...(transactionResponse.summary && {
+          transactionSummary: transactionResponse.summary,
+        }),
+      });
+    } catch (error) {
+      const { code, message } = handleError(error);
+
+      return status(code, { message });
+    }
+  })
 
   // Update a transaction by ID
   .put(

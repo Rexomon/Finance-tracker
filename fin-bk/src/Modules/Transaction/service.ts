@@ -13,10 +13,11 @@ import { adjustBudgetForTransaction } from "../Budget/service";
 
 import {
   createNewTransaction,
-  transactionQueryDelete,
   transactionQueryFind,
-  transactionQueryFindOne,
   transactionQueryUpdate,
+  transactionQueryDelete,
+  transactionQueryFindOne,
+  transactionQuerySummary,
 } from "./db";
 
 import type {
@@ -84,7 +85,10 @@ export const transactionCreate = async (
 
     await createNewTransaction(transactionData);
 
-    const cacheKeysToDelete = [invalidateUserTransactionCache(userId)];
+    const cacheKeysToDelete = [
+      invalidateUserTransactionCache(userId),
+      Redis.del(`transaction_summary:${userId}`),
+    ];
     if (type === "expense") {
       cacheKeysToDelete.push(invalidateUserBudgetCache(userId));
     }
@@ -120,7 +124,7 @@ export const transactionList = async ({
     }
 
     const transactions = await transactionQueryFind(userId, page, pageSize);
-    if (transactions.data.length === 0) {
+    if (transactions.metadata.totalCount === 0) {
       return {
         code: 200,
         message: "No transactions found, or you have not created any",
@@ -134,6 +138,35 @@ export const transactionList = async ({
       code: 200,
       message: "Transactions retrieved successfully",
       transactions,
+    };
+  } catch (error) {
+    const { code, message } = handleError(error);
+
+    return { code, message };
+  }
+};
+
+export const transactionSummary = async ({ userId }: TTransactionUserId) => {
+  try {
+    const cacheKey = `transaction_summary:${userId}`;
+
+    const cachedSummary = await Redis.get(cacheKey);
+    if (cachedSummary) {
+      return {
+        code: 200,
+        message: "Transactions summary retrieved successfully",
+        summary: JSON.parse(cachedSummary),
+      };
+    }
+
+    const summary = await transactionQuerySummary(userId);
+
+    await Redis.set(cacheKey, JSON.stringify(summary), "EX", 1800);
+
+    return {
+      code: 200,
+      message: "Transactions summary retrieved successfully",
+      summary,
     };
   } catch (error) {
     const { code, message } = handleError(error);
@@ -252,8 +285,9 @@ export const transactionUpdate = async (
     );
 
     const cacheKeysToDelete = [
-      invalidateUserTransactionCache(userId),
       invalidateUserBudgetCache(userId),
+      invalidateUserTransactionCache(userId),
+      Redis.del(`transaction_summary:${userId}`),
     ];
 
     await Promise.all(cacheKeysToDelete);
@@ -304,7 +338,10 @@ export const transactionDelete = async (
       userId,
     });
 
-    const cacheKeysToDelete = [invalidateUserTransactionCache(userId)];
+    const cacheKeysToDelete = [
+      invalidateUserTransactionCache(userId),
+      Redis.del(`transaction_summary:${userId}`),
+    ];
     if (existingTransaction.type === "expense") {
       cacheKeysToDelete.push(invalidateUserBudgetCache(userId));
     }

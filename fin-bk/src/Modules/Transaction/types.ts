@@ -46,6 +46,31 @@ export const TransactionIdSchema = t.Object({
   transactionId: ObjectIdSchema,
 });
 
+export type TCurrentMonthSummaryAggregate = {
+  totalIncome: number;
+  totalExpense: number;
+};
+
+export type TExpenseByCategoryAggregate = {
+  categoryId: string;
+  categoryName: string;
+  totalAmount: number;
+};
+
+export type TMonthlyTrendsAggregate = {
+  month: number;
+  year: number;
+  totalIncome: number;
+  totalExpense: number;
+};
+
+export type TTransactionAggregate = {
+  data: ({ _id: string } & TTransaction)[];
+  metadata: {
+    totalCount: number;
+  }[];
+};
+
 export type TTransaction = typeof TransactionSchema.static;
 export type TTransactionId = typeof TransactionIdSchema.static;
 export type TTransactionUserId = typeof TransactionUserIdSchema.static;
