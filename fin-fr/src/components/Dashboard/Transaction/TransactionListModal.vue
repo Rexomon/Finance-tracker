@@ -359,7 +359,6 @@ interface TransactionMetadata {
 
 interface Props {
   show: boolean;
-  transactions: Transaction[];
 }
 
 const props = defineProps<Props>();
@@ -389,10 +388,9 @@ const goToPageInput = ref<number | null>(null);
 
 // Computed properties
 const uniqueCategories = computed(() => {
-  // Get unique categories from both local and prop transactions
-  const allTransactions = [...props.transactions, ...localTransactions.value];
+  // Get unique categories from local transactions
   const categories = new Map();
-  allTransactions.forEach((transaction) => {
+  localTransactions.value.forEach((transaction) => {
     if (transaction.category && !categories.has(transaction.category._id)) {
       categories.set(transaction.category._id, transaction.category);
     }
@@ -522,18 +520,6 @@ watch(
       fetchTransactions(1);
     }
   },
-);
-
-// Watch for transactions prop changes (when parent refetches data)
-watch(
-  () => props.transactions,
-  () => {
-    if (props.show) {
-      // Refetch current page when parent data changes
-      fetchTransactions(metadata.value.page);
-    }
-  },
-  { deep: true },
 );
 </script>
 

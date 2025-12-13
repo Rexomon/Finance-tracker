@@ -525,10 +525,13 @@ interface BudgetPagination {
 
 interface Props {
   show: boolean;
-  categories: Category[];
 }
 
 const props = defineProps<Props>();
+
+// Local categories state
+const categories = ref<Category[]>([]);
+const categoriesLoading = ref(false);
 const emit = defineEmits<{
   close: [];
   "budget-updated": [];
@@ -536,6 +539,28 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const fetchLoading = ref(false);
+
+// Fetch expense categories for dropdown
+const fetchCategories = async () => {
+  categoriesLoading.value = true;
+  try {
+    const response = await fetchWithAuth(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/categories`,
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      // Filter only expense categories for budget
+      categories.value = (data.categories || []).filter(
+        (cat: Category) => cat.type === "expense",
+      );
+    }
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+  } finally {
+    categoriesLoading.value = false;
+  }
+};
 const filterPeriod = ref<"current" | "all">("current");
 const showEditModal = ref(false);
 const editingBudgetId = ref<string>("");
@@ -786,6 +811,8 @@ watch(
         pageSize: 50,
         totalPages: 0,
       };
+      // Fetch categories and budgets when modal opens
+      fetchCategories();
       // Fetch with larger pageSize to get more data for client-side filtering
       fetchBudgets(1, 50);
     }

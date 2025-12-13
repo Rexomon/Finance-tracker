@@ -37,9 +37,12 @@
             <select
               v-model="form.category"
               required
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+              :disabled="categoriesLoading"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 disabled:bg-gray-100"
             >
-              <option value="">Choose Category</option>
+              <option value="">
+                {{ categoriesLoading ? "Loading..." : "Choose Category" }}
+              </option>
               <option
                 v-for="category in categories"
                 :key="category._id"
@@ -132,21 +135,51 @@ const { showSuccessToast, showErrorToast } = useGlobalToast();
 interface Category {
   _id: string;
   categoryName: string;
-  type: "expense";
+  type: "expense" | "income";
 }
 
 interface Props {
   show: boolean;
-  categories: Category[];
 }
 
 const props = defineProps<Props>();
+
+// Local categories state
+const categories = ref<Category[]>([]);
+const categoriesLoading = ref(false);
 const emit = defineEmits<{
   close: [];
   "budget-added": [];
 }>();
 
 const loading = ref(false);
+
+// Fetch expense categories for dropdown
+const fetchCategories = async () => {
+  categoriesLoading.value = true;
+  try {
+    const response = await fetchWithAuth(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/categories`,
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      // Filter only expense categories for budget
+      categories.value = (data.categories || []).filter(
+        (cat: Category) => cat.type === "expense",
+      );
+    } else {
+      const error = await response.json();
+      showErrorToast(error.message || "Failed to load categories");
+    }
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    showErrorToast("Failed to load categories");
+  } finally {
+    categoriesLoading.value = false;
+  }
+};
+
 const form = ref({
   category: "",
   limit: 0,
@@ -220,7 +253,7 @@ const submitBudget = async () => {
   }
 };
 
-// Watch for show prop changes to reset form
+// Watch for show prop changes to reset form and fetch categories
 watch(
   () => props.show,
   (newShow) => {
@@ -232,6 +265,8 @@ watch(
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
       };
+      // Fetch categories when modal opens
+      fetchCategories();
     }
   },
 );

@@ -574,7 +574,6 @@
       :show="showTransactionModal"
       @close="closeTransactionModal"
       @transaction-added="onTransactionAdded"
-      :categories="categories"
       :transaction="selectedTransaction"
       :editMode="editMode"
     />
@@ -585,7 +584,6 @@
       @close="closeTransactionListModal"
       @edit-transaction="onEditTransaction"
       @delete-transaction="onDeleteTransaction"
-      :transactions="transactions"
     />
 
     <!-- Category Modal -->
@@ -601,7 +599,6 @@
       @close="closeCategoryListModal"
       @edit-category="onEditCategory"
       @delete-category="onDeleteCategory"
-      :categories="categories"
     />
 
     <!-- Budget Modal -->
@@ -609,7 +606,6 @@
       :show="showBudgetModal"
       @close="closeBudgetModal"
       @budget-added="onBudgetAdded"
-      :categories="expenseCategories"
     />
 
     <!-- Budget List Modal -->
@@ -617,7 +613,6 @@
       :show="showBudgetListModal"
       @close="closeBudgetListModal"
       @budget-updated="onBudgetUpdated"
-      :categories="expenseCategories"
     />
   </div>
 </template>
@@ -657,38 +652,49 @@ interface Transaction {
   };
 }
 
-interface Budget {
+// Transaction Summary interfaces (from backend)
+interface CurrentMonthSummary {
+  totalIncome: number;
+  totalExpense: number;
+  balance: number;
+}
+
+interface ExpenseByCategoryItem {
+  categoryId: string;
+  categoryName: string;
+  totalAmount: number;
+}
+
+interface MonthlyTrendItem {
+  month: number;
+  year: number;
+  totalIncome: number;
+  totalExpense: number;
+}
+
+interface BudgetStatusItem {
   _id: string;
   category: {
     _id: string;
     categoryName: string;
     type: "income" | "expense";
   };
-  limit: number;
-  month: number;
-  year: number;
+  originalLimit: number;
+  spentAmount: number;
+  remainingAmount: number;
+  usagePercentage: number;
 }
 
-interface Category {
-  _id: string;
-  categoryName: string;
-  type: "expense";
-}
-
-interface TransactionPagination {
-  metadata: {
-    totalCount: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
-  };
-  data: Transaction[];
+interface TransactionSummary {
+  currentMonthSummary: CurrentMonthSummary;
+  expenseByCategory: ExpenseByCategoryItem[];
+  monthlyTrends: MonthlyTrendItem[];
+  recentTransactions: Transaction[];
+  budgetStatus: BudgetStatusItem[];
 }
 
 // Reactive data
-const transactions = ref<Transaction[]>([]);
-const budgets = ref<Budget[]>([]);
-const categories = ref<Category[]>([]);
+const transactionSummary = ref<TransactionSummary | null>(null);
 const loading = ref(false);
 const showTransactionModal = ref(false);
 const showTransactionListModal = ref(false);
@@ -702,61 +708,34 @@ const showBudgetDropdown = ref(false);
 const editMode = ref(false);
 const selectedTransaction = ref<Transaction>();
 
-// Computed properties
-const currentMonthTransactions = computed(() => {
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
-
-  return transactions.value.filter((transaction) => {
-    const transactionDate = new Date(transaction.date);
-    return (
-      transactionDate.getMonth() + 1 === currentMonth &&
-      transactionDate.getFullYear() === currentYear
-    );
-  });
-});
-
+// Computed properties based on transaction summary
 const totalIncome = computed(() => {
-  return currentMonthTransactions.value
-    .filter((t) => t.type === "income")
-    .reduce((sum, t) => sum + t.amount, 0);
+  return transactionSummary.value?.currentMonthSummary.totalIncome || 0;
 });
 
 const totalExpense = computed(() => {
-  return currentMonthTransactions.value
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
+  return transactionSummary.value?.currentMonthSummary.totalExpense || 0;
 });
 
-const currentBalance = computed(() => totalIncome.value - totalExpense.value);
+const currentBalance = computed(() => {
+  return transactionSummary.value?.currentMonthSummary.balance || 0;
+});
 
-const recentTransactions = computed(() => transactions.value.slice(0, 10));
-
-const expenseCategories = computed(() => {
-  return categories.value.filter((cat) => cat.type === "expense");
+const recentTransactions = computed(() => {
+  return transactionSummary.value?.recentTransactions || [];
 });
 
 const processedBudgets = computed(() => {
-  return budgets.value.map((budget: Budget) => {
-    const spent = currentMonthTransactions.value
-      .filter(
-        (t) => t.type === "expense" && t.category._id === budget.category._id,
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+  const budgetStatus = transactionSummary.value?.budgetStatus || [];
 
-    const originalLimit = budget.limit + spent;
-    const remaining = budget.limit;
-    const percentage = originalLimit > 0 ? (spent / originalLimit) * 100 : 0;
-
-    return {
-      ...budget,
-      spent: Math.max(spent, 0),
-      originalLimit: originalLimit,
-      remaining: remaining,
-      percentage: Math.max(percentage, 0),
-    };
-  });
+  return budgetStatus.map((budget) => ({
+    _id: budget._id,
+    category: budget.category,
+    spent: budget.spentAmount,
+    originalLimit: budget.originalLimit,
+    remaining: budget.remainingAmount,
+    percentage: budget.usagePercentage,
+  }));
 });
 
 const getBudgetStatusClass = (remaining: number) => {
@@ -772,166 +751,49 @@ const getBudgetStatusText = (remaining: number) => {
 };
 
 const expenseByCategory = computed(() => {
-  const categoryExpenses = new Map();
+  const expenseByCat = transactionSummary.value?.expenseByCategory || [];
 
-  currentMonthTransactions.value
-    .filter((t) => t.type === "expense")
-    .forEach((transaction) => {
-      const categoryName = transaction.category.categoryName;
-      const currentAmount = categoryExpenses.get(categoryName) || 0;
-      categoryExpenses.set(categoryName, currentAmount + transaction.amount);
-    });
-
-  return Array.from(categoryExpenses.entries()).map(([name, amount]) => ({
-    name,
-    value: amount,
+  return expenseByCat.map((item) => ({
+    name: item.categoryName,
+    value: item.totalAmount,
   }));
 });
 
 const monthlyTrend = computed(() => {
-  const months = [];
-  const now = new Date();
+  const trends = transactionSummary.value?.monthlyTrends || [];
 
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthTransactions = transactions.value.filter((t) => {
-      const tDate = new Date(t.date);
-      return (
-        tDate.getMonth() === date.getMonth() &&
-        tDate.getFullYear() === date.getFullYear()
-      );
-    });
-
-    const income = monthTransactions
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0);
-    const expense = monthTransactions
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    months.push({
+  // Backend already returns data sorted ascending (oldest first)
+  return trends.map((item) => {
+    const date = new Date(item.year, item.month - 1, 1);
+    return {
       month: date.toLocaleDateString("id-ID", {
         month: "short",
         year: "numeric",
       }),
-      income,
-      expense,
-    });
-  }
-
-  return months;
+      income: item.totalIncome,
+      expense: item.totalExpense,
+    };
+  });
 });
 
 // Methods
-const fetchTransactions = async () => {
+const fetchTransactionSummary = async () => {
   try {
-    // Fetch first page to get metadata
-    const firstResponse = await fetchWithAuth(
-      `${import.meta.env.VITE_BACKEND_URL}/v1/transactions?page=1&pageSize=50`,
+    const response = await fetchWithAuth(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/transactions/summary`,
     );
 
-    if (!firstResponse.ok) {
-      console.error("Error fetching transactions:", firstResponse.status);
-      transactions.value = [];
+    if (!response.ok) {
+      console.error("Error fetching transaction summary:", response.status);
+      transactionSummary.value = null;
       return;
     }
 
-    const firstData = await firstResponse.json();
-    const paginatedData: TransactionPagination = firstData.transactions;
-
-    if (!paginatedData || !paginatedData.data) {
-      transactions.value = [];
-      return;
-    }
-
-    let allTransactions: Transaction[] = [...paginatedData.data];
-    const { totalPages } = paginatedData.metadata;
-
-    // Fetch remaining pages if there are more
-    if (totalPages > 1) {
-      const pagePromises = [];
-      for (let page = 2; page <= totalPages; page++) {
-        pagePromises.push(
-          fetchWithAuth(
-            `${import.meta.env.VITE_BACKEND_URL}/v1/transactions?page=${page}&pageSize=50`,
-          ),
-        );
-      }
-
-      const responses = await Promise.all(pagePromises);
-      for (const response of responses) {
-        if (response.ok) {
-          const data = await response.json();
-          if (data.transactions?.data) {
-            allTransactions = [...allTransactions, ...data.transactions.data];
-          }
-        }
-      }
-    }
-
-    transactions.value = allTransactions;
+    const data = await response.json();
+    transactionSummary.value = data.transactionSummary || null;
   } catch (error) {
-    console.error("Error fetching transactions:", error);
-    transactions.value = [];
-  }
-};
-
-const fetchBudgets = async () => {
-  try {
-    // Fetch current month budgets for dashboard display
-    const currentMonth = new Date().getMonth() + 1;
-    const currentYear = new Date().getFullYear();
-
-    const response = await fetchWithAuth(
-      `${import.meta.env.VITE_BACKEND_URL}/v1/budgets?page=1&pageSize=50`,
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      const budgetsResponse = data.budgets;
-
-      let budgetsData: Budget[] = [];
-
-      // Handle paginated response structure from backend
-      if (budgetsResponse?.data) {
-        budgetsData = budgetsResponse.data;
-      } else if (Array.isArray(budgetsResponse)) {
-        // Fallback for array response
-        budgetsData = budgetsResponse;
-      }
-
-      // Filter budgets for current month and year for dashboard tracking
-      const currentMonthBudgets = budgetsData.filter(
-        (budget: Budget) =>
-          budget.month === currentMonth && budget.year === currentYear,
-      );
-
-      // Store current month budget data for dashboard display
-      budgets.value = currentMonthBudgets;
-    } else {
-      // Handle error cases - set empty array
-      console.error("Error fetching budgets:", response.status);
-      budgets.value = [];
-    }
-  } catch (error) {
-    console.error("Error fetching budgets:", error);
-    // Set empty array on error
-    budgets.value = [];
-  }
-};
-
-const fetchCategories = async () => {
-  try {
-    const response = await fetchWithAuth(
-      `${import.meta.env.VITE_BACKEND_URL}/v1/categories`,
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      categories.value = data.categories || [];
-    }
-  } catch (error) {
-    console.error("Error fetching categories:", error);
+    console.error("Error fetching transaction summary:", error);
+    transactionSummary.value = null;
   }
 };
 
@@ -1046,7 +908,7 @@ const handleBudgetAction = (action: "add" | "view") => {
 
 // Event handlers
 const onTransactionAdded = async () => {
-  await Promise.all([fetchTransactions(), fetchBudgets()]);
+  await fetchTransactionSummary();
   closeTransactionModal();
 };
 
@@ -1067,7 +929,8 @@ const onDeleteTransaction = async (transactionId: string) => {
     );
 
     if (response.ok) {
-      await Promise.all([fetchTransactions(), fetchBudgets()]);
+      showSuccessToast("Transaction deleted successfully");
+      await fetchTransactionSummary();
     } else {
       const error = await response.json();
       showErrorToast(error.message || "Failed to delete transaction");
@@ -1079,25 +942,25 @@ const onDeleteTransaction = async (transactionId: string) => {
 };
 
 const onCategoryAdded = async () => {
-  await fetchCategories();
+  // Categories are now fetched within their respective modals
   closeCategoryModal();
 };
 
 const onEditCategory = async () => {
-  await Promise.all([fetchCategories(), fetchTransactions(), fetchBudgets()]);
+  await fetchTransactionSummary();
 };
 
 const onDeleteCategory = async () => {
-  await fetchCategories();
+  // Categories are now fetched within their respective modals
 };
 
 const onBudgetAdded = async () => {
-  await fetchBudgets();
+  await fetchTransactionSummary();
   closeBudgetModal();
 };
 
 const onBudgetUpdated = async () => {
-  await fetchBudgets();
+  await fetchTransactionSummary();
 };
 
 // Click outside handler for dropdowns
@@ -1131,11 +994,8 @@ onMounted(async () => {
 
   loading.value = true;
 
-  // Load transactions and categories first
-  await Promise.all([fetchTransactions(), fetchCategories()]);
-
-  // Then load budgets after transactions are available
-  await fetchBudgets();
+  // Load transaction summary (includes budget status)
+  await fetchTransactionSummary();
 
   loading.value = false;
 

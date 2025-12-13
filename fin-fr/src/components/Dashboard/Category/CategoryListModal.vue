@@ -276,10 +276,13 @@ interface Category {
 
 interface Props {
   show: boolean;
-  categories: Category[];
 }
 
 const props = defineProps<Props>();
+
+// Local categories state
+const categories = ref<Category[]>([]);
+const categoriesLoading = ref(false);
 const emit = defineEmits<{
   close: [];
   "edit-category": [category: Category];
@@ -294,14 +297,37 @@ const editForm = ref({
   type: "income" as "income" | "expense",
 });
 
+// Fetch categories from API
+const fetchCategories = async () => {
+  categoriesLoading.value = true;
+  try {
+    const response = await fetchWithAuth(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/categories`,
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      categories.value = data.categories || [];
+    } else {
+      const error = await response.json();
+      showErrorToast(error.message || "Failed to load categories");
+    }
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    showErrorToast("Failed to load categories");
+  } finally {
+    categoriesLoading.value = false;
+  }
+};
+
 const filteredCategories = computed(() => {
-  if (!props.categories || props.categories.length === 0) {
+  if (!categories.value || categories.value.length === 0) {
     return [];
   }
   if (filterType.value === "all") {
-    return props.categories;
+    return categories.value;
   }
-  return props.categories.filter((cat) => cat.type === filterType.value);
+  return categories.value.filter((cat) => cat.type === filterType.value);
 });
 
 const startEdit = (category: Category) => {
@@ -336,6 +362,9 @@ const saveCategory = async (categoryId: string) => {
     );
 
     if (response.ok) {
+      // Refresh categories list
+      await fetchCategories();
+
       emit("edit-category", {
         _id: categoryId,
         categoryName: editForm.value.categoryName,
@@ -375,6 +404,9 @@ const deleteCategory = async (categoryId: string) => {
     );
 
     if (response.ok) {
+      // Refresh categories list
+      await fetchCategories();
+
       emit("delete-category", categoryId);
       showSuccessToast("Category deleted successfully");
     } else {
@@ -396,6 +428,8 @@ watch(
     if (newShow) {
       cancelEdit();
       filterType.value = "all";
+      // Fetch categories when modal opens
+      fetchCategories();
     }
   },
 );

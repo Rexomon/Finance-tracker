@@ -68,7 +68,7 @@
             >
             <select
               v-model="form.type"
-              @change="filterCategories"
+              @change="onTypeChange"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
             >
@@ -85,9 +85,12 @@
             <select
               v-model="form.category"
               required
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
+              :disabled="categoriesLoading"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 disabled:bg-gray-100"
             >
-              <option value="">Choose Category</option>
+              <option value="">
+                {{ categoriesLoading ? "Loading..." : "Choose Category" }}
+              </option>
               <option
                 v-for="category in filteredCategories"
                 :key="category._id"
@@ -165,12 +168,15 @@ interface Transaction {
 
 interface Props {
   show: boolean;
-  categories: Category[];
   editMode?: boolean;
   transaction?: Transaction;
 }
 
 const props = defineProps<Props>();
+
+// Local categories state
+const categories = ref<Category[]>([]);
+const categoriesLoading = ref(false);
 const emit = defineEmits<{
   close: [];
   "transaction-added": [];
@@ -187,15 +193,46 @@ const form = ref({
 
 const filteredCategories = ref<Category[]>([]);
 
-const filterCategories = () => {
+// Fetch categories from API
+const fetchCategories = async () => {
+  categoriesLoading.value = true;
+  try {
+    const response = await fetchWithAuth(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/categories`,
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      categories.value = data.categories || [];
+      // Apply filter if type is already selected
+      if (form.value.type) {
+        filterCategories(false);
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    showErrorToast("Failed to load categories");
+  } finally {
+    categoriesLoading.value = false;
+  }
+};
+
+// Called when user manually changes type dropdown
+const onTypeChange = () => {
+  filterCategories(true);
+};
+
+const filterCategories = (resetCategory = false) => {
   if (form.value.type) {
-    filteredCategories.value = props.categories.filter(
+    filteredCategories.value = categories.value.filter(
       (cat) => cat.type === form.value.type,
     );
   } else {
     filteredCategories.value = [];
   }
-  form.value.category = ""; // Reset category selection
+  if (resetCategory) {
+    form.value.category = ""; // Reset category selection
+  }
 };
 
 const submitTransaction = async () => {
@@ -258,11 +295,14 @@ const submitTransaction = async () => {
   }
 };
 
-// Watch for show prop changes to reset form
+// Watch for show prop changes to reset form and fetch categories
 watch(
   () => props.show,
   (newShow) => {
     if (newShow) {
+      // Fetch categories when modal opens
+      fetchCategories();
+
       if (props.editMode && props.transaction) {
         // Populate form with transaction data for editing
         form.value = {
@@ -272,7 +312,6 @@ watch(
           category: props.transaction.category._id,
           date: props.transaction.date.split("T")[0], // Format date for input
         };
-        filterCategories();
       } else {
         // Reset form for new transaction
         form.value = {
