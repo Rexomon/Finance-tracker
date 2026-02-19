@@ -124,11 +124,14 @@ export const transactionList = async ({
     }
 
     const transactions = await transactionQueryFind(userId, page, pageSize);
-    if (transactions.metadata.totalCount === 0) {
+    if (
+      transactions.metadata.totalCount === 0 ||
+      page > transactions.metadata.totalPages
+    ) {
       return {
         code: 200,
         message: "No transactions found, or you have not created any",
-        transactions: [],
+        transactions: { metadata: transactions.metadata, data: [] },
       };
     }
 
