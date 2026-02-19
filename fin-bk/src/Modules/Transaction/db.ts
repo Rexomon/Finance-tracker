@@ -84,130 +84,150 @@ export const transactionQuerySummary = async (userId: string) => {
   const userObjectId = new Types.ObjectId(userId);
 
   // Current month summary
-  const currMonthSummaryPromise =
-    TransactionModel.aggregate<TCurrentMonthSummaryAggregate>([
-      {
-        $match: {
-          userId: userObjectId,
-          date: { $gte: startDate, $lt: endDate },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          totalIncome: {
-            $sum: {
-              $cond: [{ $eq: ["$type", "income"] }, "$amount", 0],
-            },
-          },
-          totalExpense: {
-            $sum: {
-              $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0],
-            },
+  function getCurrentMonthSummary() {
+    const currMonthSummaryPromise =
+      TransactionModel.aggregate<TCurrentMonthSummaryAggregate>([
+        {
+          $match: {
+            userId: userObjectId,
+            date: { $gte: startDate, $lt: endDate },
           },
         },
-      },
-      {
-        $project: {
-          _id: 0,
-          totalIncome: 1,
-          totalExpense: 1,
+        {
+          $group: {
+            _id: null,
+            totalIncome: {
+              $sum: {
+                $cond: [{ $eq: ["$type", "income"] }, "$amount", 0],
+              },
+            },
+            totalExpense: {
+              $sum: {
+                $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0],
+              },
+            },
+          },
         },
-      },
-    ]);
+        {
+          $project: {
+            _id: 0,
+            totalIncome: 1,
+            totalExpense: 1,
+          },
+        },
+      ]);
+
+    return currMonthSummaryPromise;
+  }
 
   // Expense by category for the current month
-  const expenseByCategoryPromise =
-    TransactionModel.aggregate<TExpenseByCategoryAggregate>([
-      {
-        $match: {
-          userId: userObjectId,
-          type: "expense",
-          date: { $gte: startDate, $lt: endDate },
+  function getExpenseByCategory() {
+    const expenseByCategoryPromise =
+      TransactionModel.aggregate<TExpenseByCategoryAggregate>([
+        {
+          $match: {
+            userId: userObjectId,
+            type: "expense",
+            date: { $gte: startDate, $lt: endDate },
+          },
         },
-      },
-      {
-        $group: {
-          _id: "$category",
-          totalAmount: { $sum: "$amount" },
+        {
+          $group: {
+            _id: "$category",
+            totalAmount: { $sum: "$amount" },
+          },
         },
-      },
-      {
-        $lookup: {
-          from: "categories",
-          localField: "_id",
-          foreignField: "_id",
-          as: "category",
+        {
+          $lookup: {
+            from: "categories",
+            localField: "_id",
+            foreignField: "_id",
+            as: "category",
+          },
         },
-      },
-      { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          _id: 0,
-          categoryId: "$category._id",
-          categoryName: "$category.categoryName",
-          totalAmount: 1,
+        { $unwind: { path: "$category", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            _id: 0,
+            categoryId: "$category._id",
+            categoryName: "$category.categoryName",
+            totalAmount: 1,
+          },
         },
-      },
-    ]);
+      ]);
+
+    return expenseByCategoryPromise;
+  }
 
   // Monthly trends for the past 6 months
-  const sixMonthsAgoDate = new Date(year, month - 6, 1);
+  function getMonthlyTrends() {
+    const sixMonthsAgoDate = new Date(year, month - 6, 1);
 
-  const monthlyTrendsPromise =
-    TransactionModel.aggregate<TMonthlyTrendsAggregate>([
-      {
-        $match: {
-          userId: userObjectId,
-          date: { $gte: sixMonthsAgoDate, $lt: endDate },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            month: { $month: "$date" },
-            year: { $year: "$date" },
+    const monthlyTrendsPromise =
+      TransactionModel.aggregate<TMonthlyTrendsAggregate>([
+        {
+          $match: {
+            userId: userObjectId,
+            date: { $gte: sixMonthsAgoDate, $lt: endDate },
           },
-          totalIncome: {
-            $sum: {
-              $cond: [{ $eq: ["$type", "income"] }, "$amount", 0],
+        },
+        {
+          $group: {
+            _id: {
+              month: { $month: "$date" },
+              year: { $year: "$date" },
+            },
+            totalIncome: {
+              $sum: {
+                $cond: [{ $eq: ["$type", "income"] }, "$amount", 0],
+              },
+            },
+            totalExpense: {
+              $sum: {
+                $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0],
+              },
             },
           },
-          totalExpense: {
-            $sum: {
-              $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0],
-            },
+        },
+        {
+          $project: {
+            _id: 0,
+            month: "$_id.month",
+            year: "$_id.year",
+            totalIncome: 1,
+            totalExpense: 1,
           },
         },
-      },
-      {
-        $project: {
-          _id: 0,
-          month: "$_id.month",
-          year: "$_id.year",
-          totalIncome: 1,
-          totalExpense: 1,
-        },
-      },
-    ]);
+      ]);
+
+    return monthlyTrendsPromise;
+  }
 
   // Recent 10 transactions
-  const recentTransactionsPromise = TransactionModel.find(
-    { userId: userObjectId },
-    { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 },
-  )
-    .populate("category", { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 })
-    .sort({ date: -1 })
-    .limit(10)
-    .lean();
+  function getRecentTransactions() {
+    const recentTransactionsPromise = TransactionModel.find(
+      { userId: userObjectId },
+      { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 },
+    )
+      .populate("category", { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 })
+      .sort({ date: -1 })
+      .limit(10)
+      .lean();
+
+    return recentTransactionsPromise;
+  }
 
   // Budget status for the current month
-  const budgetsPromise = BudgetModel.find(
-    { userId: userObjectId, month, year },
-    { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 },
-  )
-    .populate("category", { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 })
-    .lean();
+  function getBudgets() {
+    const budgetsPromise = BudgetModel.find(
+      { userId: userObjectId, month, year },
+      { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 },
+    )
+      .populate("category", { userId: 0, createdAt: 0, updatedAt: 0, __v: 0 })
+      .lean();
+
+    return budgetsPromise;
+  }
 
   const [
     currMonthSummary,
@@ -216,11 +236,11 @@ export const transactionQuerySummary = async (userId: string) => {
     recentTransactions,
     rawBudgets,
   ] = await Promise.all([
-    currMonthSummaryPromise,
-    expenseByCategoryPromise,
-    monthlyTrendsPromise,
-    recentTransactionsPromise,
-    budgetsPromise,
+    getCurrentMonthSummary(),
+    getExpenseByCategory(),
+    getMonthlyTrends(),
+    getRecentTransactions(),
+    getBudgets(),
   ]);
 
   const totalIncome = currMonthSummary[0]?.totalIncome || 0;
