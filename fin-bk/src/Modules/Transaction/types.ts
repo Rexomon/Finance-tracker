@@ -33,7 +33,12 @@ export const TransactionDBQuerySchema = t.Intersect([
 ]);
 
 export const TransactionQuerySchema = t.Object({
-  page: t.Integer({ minimum: 1, default: 1, error: "Invalid page number" }),
+  page: t.Integer({
+    minimum: 1,
+    maximum: 10000,
+    default: 1,
+    error: "Invalid page number",
+  }),
   pageSize: t.Integer({
     minimum: 10,
     maximum: 50,
