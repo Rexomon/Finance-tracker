@@ -59,7 +59,13 @@ export const budgetCreate = async ({
     };
 
     await createNewBudget(budgetData);
-    await invalidateUserBudgetCache(userId);
+
+    const cacheKeysToDelete = [
+      invalidateUserBudgetCache(userId),
+      Redis.del(`transaction_summary:${userId}`),
+    ];
+
+    await Promise.all(cacheKeysToDelete);
 
     return { code: 201, message: "Budget created successfully" };
   } catch (error) {
@@ -87,11 +93,14 @@ export const budgetList = async ({
     }
 
     const budgets = await budgetQueryFind(userId, page, pageSize);
-    if (budgets.data.length === 0) {
+    if (
+      budgets.metadata.totalPages === 0 ||
+      page > budgets.metadata.totalPages
+    ) {
       return {
         code: 200,
         message: "No budgets found, or you have not created any",
-        budgets: [],
+        budgets: { metadata: budgets.metadata, data: [] },
       };
     }
 
@@ -193,7 +202,13 @@ export const budgetUpdate = async ({
     if (year !== undefined) updatedData.year = year;
 
     await budgetQueryUpdate({ _id: budgetId, userId }, updatedData);
-    await invalidateUserBudgetCache(userId);
+
+    const cacheKeysToDelete = [
+      invalidateUserBudgetCache(userId),
+      Redis.del(`transaction_summary:${userId}`),
+    ];
+
+    await Promise.all(cacheKeysToDelete);
 
     return { code: 200, message: "Budget updated successfully" };
   } catch (error) {
@@ -232,7 +247,13 @@ export const budgetDelete = async ({
     }
 
     await budgetQueryDelete({ budgetId, userId });
-    await invalidateUserBudgetCache(userId);
+
+    const cacheKeysToDelete = [
+      invalidateUserBudgetCache(userId),
+      Redis.del(`transaction_summary:${userId}`),
+    ];
+
+    await Promise.all(cacheKeysToDelete);
 
     return { code: 200, message: "Budget deleted successfully" };
   } catch (error) {
