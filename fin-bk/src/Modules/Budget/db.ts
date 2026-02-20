@@ -7,6 +7,7 @@ import type {
   TBudgetDBDelete,
   TBudgetDBUpdate,
   TBudgetDBCreate,
+  TBudgetAggregate,
 } from "./types";
 
 export const budgetQueryExists = (filter: TBudgetDBQuery) => {
@@ -27,7 +28,7 @@ export const budgetQueryFind = async (
   page: number,
   pageSize: number,
 ) => {
-  const results = await BudgetModel.aggregate([
+  const results = await BudgetModel.aggregate<TBudgetAggregate>([
     { $match: { userId: new Types.ObjectId(userId) } },
     { $sort: { year: -1, month: -1 } },
     {
