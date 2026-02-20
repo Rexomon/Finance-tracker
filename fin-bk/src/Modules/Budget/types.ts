@@ -23,7 +23,12 @@ export const BudgetDBQuerySchema = t.Intersect([
 ]);
 
 export const BudgetQuerySchema = t.Object({
-  page: t.Integer({ minimum: 1, default: 1, error: "Invalid page number" }),
+  page: t.Integer({
+    minimum: 1,
+    maximum: 10000,
+    default: 1,
+    error: "Invalid page number",
+  }),
   pageSize: t.Integer({
     minimum: 10,
     maximum: 50,
@@ -37,6 +42,13 @@ export const BudgetIdSchema = t.Object({
 });
 
 export const BudgetOptionalSchema = t.Partial(BudgetSchema);
+
+export type TBudgetAggregate = {
+  data: ({ _id: string } & TBudget)[];
+  metadata: {
+    totalCount: number;
+  }[];
+};
 
 export type TBudget = typeof BudgetSchema.static;
 export type TBudgetId = typeof BudgetIdSchema.static;
