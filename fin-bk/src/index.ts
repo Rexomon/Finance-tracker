@@ -27,31 +27,6 @@ if (nodeEnv === "production" && !corsDomainOrigin) {
 
 // Elysia server initialization and configuration
 const config = new Elysia({ name: "elysia-config" })
-  .onError(({ error, code, status }) => {
-    const isProd = nodeEnv === "production";
-
-    if (code === "VALIDATION") {
-      const message = isProd
-        ? { message: "Invalid request payload" }
-        : { error: error };
-
-      return status(400, message);
-    }
-
-    if (code === "NOT_FOUND") {
-      return status(404, { message: "Not found :(" });
-    }
-
-    if (code === "INTERNAL_SERVER_ERROR") {
-      const message = isProd
-        ? { message: "An internal server error occurred" }
-        : { error: error };
-
-      return status(500, message);
-    }
-
-    if (isProd) console.error("Internal server error:", error);
-  })
   .use(
     cors({
       origin: corsDomainOrigin || "*",
@@ -105,7 +80,35 @@ if (nodeEnv === "production") {
 }
 
 // Server setup
-const app = new Elysia().use(config).use(apiRoutesV1).listen(port);
+const app = new Elysia()
+  .onError(({ error, code, status }) => {
+    const isProd = nodeEnv === "production";
+
+    if (code === "VALIDATION") {
+      const message = isProd
+        ? { message: "Invalid request payload" }
+        : { error: error };
+
+      return status(422, message);
+    }
+
+    if (code === "NOT_FOUND") {
+      return status(404, { message: "Not found :(" });
+    }
+
+    if (code === "INTERNAL_SERVER_ERROR") {
+      console.error("Internal server error:", error);
+
+      const message = isProd
+        ? { message: "An internal server error occurred" }
+        : { error: error };
+
+      return status(500, message);
+    }
+  })
+  .use(config)
+  .use(apiRoutesV1)
+  .listen(port);
 
 console.log(
   `🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`,
