@@ -194,19 +194,24 @@ const UserRoutes = new Elysia({
         return status(code, { message });
       }
     },
+    { auth: true },
   )
 
   // Get authenticated user
-  .get("/profile", async ({ status, user }) => {
-    try {
-      const userResponse = await userProfile(user);
+  .get(
+    "/profile",
+    async ({ status, user }) => {
+      try {
+        const userResponse = await userProfile(user);
 
-      return status(userResponse.code, { user: userResponse.user });
-    } catch (error) {
-      const { code, message } = handleError(error);
+        return status(userResponse.code, { user: userResponse.user });
+      } catch (error) {
+        const { code, message } = handleError(error);
 
-      return status(code, { message });
-    }
-  });
+        return status(code, { message });
+      }
+    },
+    { auth: true },
+  );
 
 export default UserRoutes;

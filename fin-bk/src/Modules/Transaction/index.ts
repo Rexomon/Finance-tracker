@@ -52,7 +52,7 @@ const TransactionRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { body: TransactionSchema },
+    { body: TransactionSchema, auth: true },
   )
 
   // Get all transactions for a user
@@ -78,25 +78,31 @@ const TransactionRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { query: TransactionQuerySchema },
+    { query: TransactionQuerySchema, auth: true },
   )
 
-  .get("/summary", async ({ status, user }) => {
-    try {
-      const transactionResponse = await transactionSummary({ userId: user.id });
+  .get(
+    "/summary",
+    async ({ status, user }) => {
+      try {
+        const transactionResponse = await transactionSummary({
+          userId: user.id,
+        });
 
-      return status(transactionResponse.code, {
-        message: transactionResponse.message,
-        ...(transactionResponse.summary && {
-          transactionSummary: transactionResponse.summary,
-        }),
-      });
-    } catch (error) {
-      const { code, message } = handleError(error);
+        return status(transactionResponse.code, {
+          message: transactionResponse.message,
+          ...(transactionResponse.summary && {
+            transactionSummary: transactionResponse.summary,
+          }),
+        });
+      } catch (error) {
+        const { code, message } = handleError(error);
 
-      return status(code, { message });
-    }
-  })
+        return status(code, { message });
+      }
+    },
+    { auth: true },
+  )
 
   // Update a transaction by ID
   .put(
@@ -123,7 +129,7 @@ const TransactionRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { body: TransactionSchema, params: TransactionIdSchema },
+    { body: TransactionSchema, params: TransactionIdSchema, auth: true },
   )
 
   // Delete a transaction by ID
@@ -148,7 +154,7 @@ const TransactionRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { params: TransactionIdSchema },
+    { params: TransactionIdSchema, auth: true },
   );
 
 export default TransactionRoutes;

@@ -55,7 +55,7 @@ const CategoryHandling = new Elysia({
         return status(code, { message });
       }
     },
-    { body: CategorySchema },
+    { body: CategorySchema, auth: true },
   )
 
   // Get all categories for the authenticated user, optionally filtered by type
@@ -79,7 +79,7 @@ const CategoryHandling = new Elysia({
         return status(code, { message });
       }
     },
-    { query: CategoryQuerySchema },
+    { query: CategoryQuerySchema, auth: true },
   )
 
   // Delete a category by ID
@@ -104,7 +104,7 @@ const CategoryHandling = new Elysia({
         return status(code, { message });
       }
     },
-    { params: CategoryIdSchema },
+    { params: CategoryIdSchema, auth: true },
   )
 
   // Update a category by ID
@@ -133,7 +133,7 @@ const CategoryHandling = new Elysia({
         return status(code, { message });
       }
     },
-    { body: CategoryOptionalSchema, params: CategoryIdSchema },
+    { body: CategoryOptionalSchema, params: CategoryIdSchema, auth: true },
   );
 
 export default CategoryHandling;

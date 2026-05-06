@@ -1,22 +1,17 @@
-import Elysia from "elysia";
+import { Elysia } from "elysia";
 
 import Redis from "../Config/Redis";
 
 import { JwtAccessToken } from "./Jwt";
 import { userQueryExists } from "../Modules/User/db";
 
-import type { TAuthUser } from "../Types/types";
-
-const Auth = new Elysia()
-  .use(JwtAccessToken())
-  .state("user", { id: "", email: "", iat: 0 } as TAuthUser)
-  .onBeforeHandle(
-    async ({
+const Auth = new Elysia({ name: "Auth" }).use(JwtAccessToken()).macro({
+  auth: {
+    async resolve({
       status,
-      store,
       cookie: { AccessToken, RefreshToken },
       JwtAccessToken,
-    }) => {
+    }) {
       const access = AccessToken.value as string;
       const refresh = RefreshToken.value as string;
 
@@ -55,20 +50,19 @@ const Auth = new Elysia()
           return status(401, { message: "Session invalid" });
         }
 
-        store.user = {
-          id: userId,
-          email: email,
-          iat: iat,
-        } as TAuthUser;
+        return {
+          user: {
+            id: userId,
+            email: email,
+            iat: iat,
+          },
+        };
       } catch (error) {
         console.error(error);
         return status(500, { message: "An internal server error occurred" });
       }
     },
-  )
-  .resolve(({ store }) => {
-    return { user: store.user };
-  })
-  .as("scoped");
+  },
+});
 
 export default Auth;

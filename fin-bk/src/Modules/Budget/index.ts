@@ -55,7 +55,7 @@ const BudgetRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { body: BudgetSchema },
+    { body: BudgetSchema, auth: true },
   )
 
   // Get all budgets for a user
@@ -79,7 +79,7 @@ const BudgetRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { query: BudgetQuerySchema },
+    { query: BudgetQuerySchema, auth: true },
   )
 
   // Update a budget by ID
@@ -110,7 +110,7 @@ const BudgetRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { body: BudgetOptionalSchema, params: BudgetIdSchema },
+    { body: BudgetOptionalSchema, params: BudgetIdSchema, auth: true },
   )
 
   // Delete a budget by ID
@@ -135,7 +135,7 @@ const BudgetRoutes = new Elysia({
         return status(code, { message });
       }
     },
-    { params: BudgetIdSchema },
+    { params: BudgetIdSchema, auth: true },
   );
 
 export default BudgetRoutes;
