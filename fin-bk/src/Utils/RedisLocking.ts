@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { randomUUIDv7 } from "bun";
 
-import Redis from "../Config/Redis";
+import { redis } from "../Config/Redis";
 
 export class RedisLockError extends Error {
   code: string;
@@ -20,7 +20,7 @@ export const RedisLock = new Elysia().decorate("lock", {
     const lockKey = `lock:${keyString}`;
     const lockToken = randomUUIDv7();
 
-    const lockAcquired = await Redis.set(lockKey, lockToken, "EX", 5, "NX");
+    const lockAcquired = await redis.set(lockKey, lockToken, "EX", 5, "NX");
     if (!lockAcquired) {
       throw new RedisLockError("Redis lock acquire failed", ERROR_CODE);
     }
@@ -33,7 +33,7 @@ export const RedisLock = new Elysia().decorate("lock", {
 
     const lockKey = `lock:${keyString}`;
 
-    const currentToken = await Redis.get(lockKey);
+    const currentToken = await redis.get(lockKey);
     if (currentToken !== lockToken) {
       throw new RedisLockError(
         "Redis lock release failed: token mismatch",
@@ -41,6 +41,6 @@ export const RedisLock = new Elysia().decorate("lock", {
       );
     }
 
-    await Redis.del(lockKey);
+    await redis.del(lockKey);
   },
 });

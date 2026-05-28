@@ -1,4 +1,4 @@
-import Redis from "../Config/Redis";
+import { redis } from "../Config/Redis";
 
 import type { TObjectId } from "../Types/types";
 
@@ -8,7 +8,7 @@ const invalidateCacheByPattern = async (pattern: string) => {
 
   do {
     try {
-      const [nextCursor, keys] = await Redis.scan(
+      const [nextCursor, keys] = await redis.scan(
         cursor,
         "MATCH",
         pattern,
@@ -17,7 +17,7 @@ const invalidateCacheByPattern = async (pattern: string) => {
       );
 
       if (keys.length > 0) {
-        await Redis.unlink(keys);
+        await redis.unlink(keys);
       }
 
       cursor = nextCursor;

@@ -23,11 +23,6 @@ export const CategorySchema = t.Object(
   { additionalProperties: false },
 );
 
-export const CategoryDBQuerySchema = t.Intersect([
-  t.Object({ userId: ObjectIdSchema }),
-  t.Record(t.String(), t.Unknown()),
-]);
-
 export const CategoryIdSchema = t.Object({
   categoryId: ObjectIdSchema,
 });
@@ -40,9 +35,14 @@ export type TCategory = typeof CategorySchema.static;
 export type TCategoryId = typeof CategoryIdSchema.static;
 export type TCategoryQuery = typeof CategoryQuerySchema.static;
 export type TCategoryUserId = typeof CategoryUserIdSchema.static;
-export type TCategoryDBQuery = typeof CategoryDBQuerySchema.static;
 export type TCategoryOptional = typeof CategoryOptionalSchema.static;
 
-export type TCategoryDBDelete = Prettify<TCategoryId & TCategoryUserId>;
-export type TCategoryDBCreate = Prettify<TCategoryUserId & TCategory>;
-export type TCategoryQueryList = Prettify<TCategoryUserId & TCategoryQuery>;
+export type TCategoryCreate = Prettify<TCategoryUserId & TCategory>;
+export type TCategoryListQuery = Prettify<TCategoryUserId & TCategoryQuery>;
+export type TCategoryExistQuery = Prettify<
+  Partial<TCategoryId> & TCategoryUserId & TCategoryOptional
+>;
+export type TCategoryUpdateQuery = Prettify<
+  TCategoryId & TCategoryUserId & TCategoryOptional
+>;
+export type TCategoryDeleteQuery = Prettify<TCategoryId & TCategoryUserId>;

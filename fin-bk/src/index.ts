@@ -10,13 +10,6 @@ import { apiRoutesV1 } from "./routes";
 import { getRealIp } from "./Utils/RealIp";
 import { safelyCloseRedis } from "./Config/Redis";
 
-import {
-  connectToDatabase,
-  safelyCloseMongoDB,
-} from "./Database/DatabaseConnection";
-
-await connectToDatabase();
-
 const port = Number(Bun.env.PORT);
 const nodeEnv = Bun.env.NODE_ENV;
 const corsDomainOrigin = Bun.env.DOMAIN_ORIGIN;
@@ -124,7 +117,7 @@ const shutdownService = async (signal: string) => {
 
   console.log(`Received ${signal}, shutting down gracefully...`);
   try {
-    await Promise.all([safelyCloseRedis(), safelyCloseMongoDB(), app.stop()]);
+    await Promise.all([safelyCloseRedis(), app.stop()]);
     console.log("Elysia server stopped safely");
     process.exit(0);
   } catch (error) {

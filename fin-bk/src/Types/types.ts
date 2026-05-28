@@ -1,14 +1,18 @@
 import { t } from "elysia";
 
-export const ObjectIdSchema = t.String({
-  pattern: "^[a-fA-F0-9]{24}$",
-  error: "Invalid id format",
+export const ObjectIdSchema = t.Integer({
+  minimum: 1,
+  maximum: 2147483647,
+  error: "Invalid id",
 });
 
 export const AuthUserSchema = t.Object({
-  id: ObjectIdSchema,
-  email: t.String({ format: "email", maxLength: 160, error: "Invalid email" }),
-  iat: t.Integer({ minimum: 0 }),
+  user: t.Object({
+    id: t.Integer(),
+    name: t.String(),
+    email: t.String(),
+  }),
+  iat: t.Integer(),
 });
 
 export type Prettify<T> = {

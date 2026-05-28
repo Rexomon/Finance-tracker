@@ -6,7 +6,7 @@ if (!RedisUrl) {
   throw new Error("REDIS_URL environment variable is not set");
 }
 
-const redis = new Redis(RedisUrl, {
+export const redis = new Redis(RedisUrl, {
   retryStrategy(times) {
     const MAX_RETRIES = 3;
 
@@ -50,5 +50,3 @@ redis.on("connect", () => {
 redis.on("error", (error) => {
   console.error(`Redis not connected, ${error}`);
 });
-
-export default redis;

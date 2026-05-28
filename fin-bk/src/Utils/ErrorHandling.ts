@@ -1,6 +1,9 @@
 import { RedisLockError } from "./RedisLocking";
 
-export function handleError(error: unknown): { code: number; message: string } {
+export function handleError(error: unknown): {
+  code: 500 | 429;
+  message: string;
+} {
   if (error instanceof RedisLockError && error.code === "LOCK_ACQUIRE_FAILED") {
     return {
       code: 429,

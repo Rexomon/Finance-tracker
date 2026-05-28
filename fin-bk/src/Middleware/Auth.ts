@@ -1,65 +1,58 @@
 import { Elysia } from "elysia";
 
-import Redis from "../Config/Redis";
+import { redis } from "../Config/Redis";
 
 import { JwtAccessToken } from "./Jwt";
-import { userQueryExists } from "../Modules/User/db";
+import { handleError } from "../Utils/ErrorHandling";
+
+import { getUserById } from "../Modules/User/user-db";
+
+import type { TAuthUser } from "../Types/types";
 
 const Auth = new Elysia({ name: "Auth" }).use(JwtAccessToken()).macro({
   auth: {
     async resolve({
       status,
-      cookie: { AccessToken, RefreshToken },
       JwtAccessToken,
+      cookie: { AccessToken, RefreshToken },
     }) {
       const access = AccessToken.value as string;
       const refresh = RefreshToken.value as string;
 
       if (!access) {
         return status(401, { message: "Unauthorized: access token not found" });
-      }
-
-      if (!refresh) {
+      } else if (!refresh) {
         return status(401, {
           message: "Unauthorized: refresh token not found",
         });
       }
 
       try {
-        const decoded = await JwtAccessToken.verify(access);
+        const decoded = (await JwtAccessToken.verify(access)) as TAuthUser;
         if (!decoded) {
           return status(401, { message: "Unauthorized: invalid token" });
         }
 
-        const { id: userId, email, iat } = decoded;
+        const userId = decoded.user.id;
 
-        if (!userId || typeof userId !== "string" || !email || !iat) {
-          return status(401, { message: "Unauthorized: invalid token" });
-        }
-
-        const [existingUser, redisRefreshToken] = await Promise.all([
-          userQueryExists({ userId }),
-          Redis.get(`RefreshToken:${userId}`),
+        const [redisRefreshToken, [existingUser]] = await Promise.all([
+          redis.get(`RefreshToken:${userId}`),
+          getUserById.execute({ userId }),
         ]);
-        if (!existingUser) {
-          return status(401, { message: "Unauthorized" });
-        }
-
         // Single session sign in check
         if (!redisRefreshToken || refresh !== redisRefreshToken) {
           return status(401, { message: "Session invalid" });
+        } else if (!existingUser) {
+          return status(401, { message: "Unauthorized" });
         }
 
         return {
-          user: {
-            id: userId,
-            email: email,
-            iat: iat,
-          },
+          user: decoded.user,
         };
       } catch (error) {
-        console.error(error);
-        return status(500, { message: "An internal server error occurred" });
+        const { code, message } = handleError(error);
+
+        return status(code, { message });
       }
     },
   },
