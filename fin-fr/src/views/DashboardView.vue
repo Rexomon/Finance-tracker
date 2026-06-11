@@ -785,7 +785,13 @@ const fetchTransactionSummary = async () => {
 
     if (!response.ok) {
       console.error("Error fetching transaction summary:", response.status);
-      transactionSummary.value = null;
+
+      if (response.status === 429) {
+        showWarnToast(
+          "You have made too many requests. Please wait a moment before trying again.",
+        );
+      }
+
       return;
     }
 
@@ -793,7 +799,6 @@ const fetchTransactionSummary = async () => {
     transactionSummary.value = data.transactionSummary || null;
   } catch (error) {
     console.error("Error fetching transaction summary:", error);
-    transactionSummary.value = null;
   }
 };
 
@@ -919,26 +924,8 @@ const onEditTransaction = async (transaction: Transaction) => {
   showTransactionModal.value = true;
 };
 
-const onDeleteTransaction = async (transactionId: string) => {
-  try {
-    const response = await fetchWithAuth(
-      `${import.meta.env.VITE_BACKEND_URL}/v1/transactions/${transactionId}`,
-      {
-        method: "DELETE",
-      },
-    );
-
-    if (response.ok) {
-      showSuccessToast("Transaction deleted successfully");
-      await fetchTransactionSummary();
-    } else {
-      const error = await response.json();
-      showErrorToast(error.message || "Failed to delete transaction");
-    }
-  } catch (error) {
-    console.error("Error deleting transaction:", error);
-    showErrorToast("An error occurred while deleting transaction");
-  }
+const onDeleteTransaction = async () => {
+  await fetchTransactionSummary();
 };
 
 const onCategoryAdded = async () => {
@@ -1004,7 +991,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // Remove click outside listener
   document.removeEventListener("click", handleClickOutside);
 });
 </script>

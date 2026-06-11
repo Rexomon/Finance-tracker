@@ -35,7 +35,7 @@
               class="w-4 h-4 rounded-full"
               :style="{ backgroundColor: colors[index % colors.length] }"
             ></div>
-            <span class="text-sm text-gray-700 !text-gray-700">
+            <span class="text-sm text-gray-700 ">
               {{ item.name }} ({{ item.percentage.toFixed(1) }}%)
             </span>
           </div>
@@ -53,11 +53,11 @@
                 class="w-3 h-3 rounded-full"
                 :style="{ backgroundColor: colors[index % colors.length] }"
               ></div>
-              <span class="text-sm font-medium !text-gray-900">{{
+              <span class="text-sm font-medium text-gray-900!">{{
                 item.name
               }}</span>
             </div>
-            <span class="text-sm text-gray-600 !text-gray-600">{{
+            <span class="text-sm text-gray-600 ">{{
               formatCurrency(item.value)
             }}</span>
           </div>

@@ -15,6 +15,16 @@ export const checkAuthStatus = (): Promise<boolean> => {
           method: "GET",
         },
       );
+
+      if (response.status === 401 || response.status === 403) {
+        return false;
+      }
+
+      if (response.status === 429) {
+        authCheckPromise = null;
+        return true;
+      }
+
       return response.ok;
     } catch (error) {
       console.error("Error checking auth status:", error);
