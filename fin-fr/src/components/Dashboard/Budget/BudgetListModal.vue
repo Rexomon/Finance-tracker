@@ -237,30 +237,23 @@
             <!-- Left: Info -->
             <div class="text-sm text-gray-700">
               <template v-if="filterPeriod === 'current'">
-                Showing {{ currentMonthBudgets.length }} budget{{
-                  currentMonthBudgets.length !== 1 ? "s" : ""
+                Showing {{ paginationRange.from }} to
+                {{ paginationRange.to }} of {{ pagination.totalCount }} budget{{
+                  pagination.totalCount !== 1 ? "s" : ""
                 }}
                 for current month
-                <span v-if="pagination.totalCount > 0" class="text-gray-500">
-                  ({{ pagination.totalCount }} total)
-                </span>
               </template>
               <template v-else>
-                Showing
-                {{ (pagination.page - 1) * pagination.pageSize + 1 }} to
-                {{
-                  Math.min(
-                    pagination.page * pagination.pageSize,
-                    pagination.totalCount,
-                  )
+                Showing {{ paginationRange.from }} to
+                {{ paginationRange.to }} of {{ pagination.totalCount }} budget{{
+                  pagination.totalCount !== 1 ? "s" : ""
                 }}
-                of {{ pagination.totalCount }} budgets
               </template>
             </div>
 
             <!-- Center: Go to Page Input -->
             <div
-              v-if="filterPeriod === 'all' && pagination.totalPages > 1"
+              v-if="pagination.totalPages > 1"
               class="flex items-center gap-2"
             >
               <label class="text-sm text-gray-700">Go to page:</label>
@@ -615,30 +608,39 @@ const isValidPageInput = computed(() => {
   );
 });
 
-// Client-side filtered budgets for "Current Month"
-const currentMonthBudgets = computed(() => {
+const getCurrentFilterQuery = () => {
+  if (filterPeriod.value !== "current") return {};
   const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
+  return { month: now.getMonth() + 1, year: now.getFullYear() };
+};
 
-  return budgets.value.filter(
-    (budget) => budget.month === currentMonth && budget.year === currentYear,
-  );
+const paginationRange = computed(() => {
+  const total = pagination.value.totalCount;
+  if (total === 0) return { from: 0, to: 0 };
+  const from = (pagination.value.page - 1) * pagination.value.pageSize + 1;
+  const to = Math.min(pagination.value.page * pagination.value.pageSize, total);
+  return { from, to };
 });
 
-const displayedBudgets = computed(() => {
-  if (filterPeriod.value === "current") {
-    return currentMonthBudgets.value;
-  }
-  return budgets.value;
-});
+const displayedBudgets = computed(() => budgets.value);
 
-const fetchBudgets = async (page: number = 1, pageSize: number = 10) => {
+const fetchBudgets = async (
+  page: number = 1,
+  pageSize: number = 10,
+  query: { month?: number; year?: number },
+) => {
   fetchLoading.value = true;
 
   try {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (query.month) params.set("month", String(query.month));
+    if (query.year) params.set("year", String(query.year));
+
     const response = await fetchWithAuth(
-      `${import.meta.env.VITE_BACKEND_URL}/v1/budgets?page=${page}&pageSize=${pageSize}`,
+      `${import.meta.env.VITE_BACKEND_URL}/v1/budgets?${params.toString()}`,
     );
 
     if (response.ok) {
@@ -682,7 +684,7 @@ const fetchBudgets = async (page: number = 1, pageSize: number = 10) => {
 
 const goToPage = (page: number) => {
   if (page >= 1 && page <= pagination.value.totalPages) {
-    fetchBudgets(page, pagination.value.pageSize);
+    fetchBudgets(page, pagination.value.pageSize, getCurrentFilterQuery());
   }
 };
 
@@ -694,9 +696,11 @@ const handleGoToPage = () => {
 };
 
 const setFilter = (filter: "current" | "all") => {
+  if (filterPeriod.value === filter) return;
   filterPeriod.value = filter;
-  // No need to fetch again - filtering is done client-side
-  // Data is already fetched when modal opens
+  goToPageInput.value = null;
+  pagination.value.page = 1;
+  fetchBudgets(1, pagination.value.pageSize, getCurrentFilterQuery());
 };
 
 const formatCurrency = (amount: number) => {
@@ -728,7 +732,11 @@ const deleteBudget = async (budgetId: string) => {
 
     if (response.ok) {
       showSuccessToast("Budget deleted successfully");
-      await fetchBudgets(pagination.value.page, pagination.value.pageSize);
+      await fetchBudgets(
+        pagination.value.page,
+        pagination.value.pageSize,
+        getCurrentFilterQuery(),
+      );
       emit("budget-updated");
     } else {
       const error = await response.json();
@@ -784,7 +792,11 @@ const updateBudget = async () => {
     if (response.ok) {
       cancelEdit();
       showSuccessToast("Budget updated successfully");
-      await fetchBudgets(pagination.value.page, pagination.value.pageSize);
+      await fetchBudgets(
+        pagination.value.page,
+        pagination.value.pageSize,
+        getCurrentFilterQuery(),
+      );
       emit("budget-updated");
     } else {
       const error = await response.json();
@@ -808,13 +820,13 @@ watch(
       pagination.value = {
         totalCount: 0,
         page: 1,
-        pageSize: 50,
+        pageSize: 10,
         totalPages: 0,
       };
       // Fetch categories and budgets when modal opens
       fetchCategories();
       // Fetch with larger pageSize to get more data for client-side filtering
-      fetchBudgets(1, 50);
+      fetchBudgets(1, pagination.value.pageSize, getCurrentFilterQuery());
     }
   },
 );

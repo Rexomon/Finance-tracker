@@ -32,7 +32,7 @@
         <div class="overflow-y-auto" style="max-height: calc(190vh - 120px)">
           <!-- Filter Controls -->
           <div class="mb-6 flex flex-wrap gap-4">
-            <div class="flex-1 min-w-[200px]">
+            <div class="flex-1 min-w-50">
               <label class="block text-sm font-medium text-gray-700 mb-2"
                 >Filter by Type</label
               >
@@ -46,7 +46,7 @@
                 <option value="expense">Expense</option>
               </select>
             </div>
-            <div class="flex-1 min-w-[200px]">
+            <div class="flex-1 min-w-50">
               <label class="block text-sm font-medium text-gray-700 mb-2"
                 >Filter by Category</label
               >
@@ -65,7 +65,7 @@
                 </option>
               </select>
             </div>
-            <div class="flex-1 min-w-[200px]">
+            <div class="flex-1 min-w-50">
               <label class="block text-sm font-medium text-gray-700 mb-2"
                 >Search</label
               >
@@ -335,7 +335,7 @@ import { ref, computed, watch } from "vue";
 import { fetchWithAuth } from "../../../utils/auth";
 import { useGlobalToast } from "@/composables/useGlobalToast";
 
-const { showSuccessToast } = useGlobalToast();
+const { showSuccessToast, showErrorToast } = useGlobalToast();
 
 interface Transaction {
   _id: string;
@@ -388,13 +388,14 @@ const goToPageInput = ref<number | null>(null);
 
 // Computed properties
 const uniqueCategories = computed(() => {
-  // Get unique categories from local transactions
   const categories = new Map();
-  localTransactions.value.forEach((transaction) => {
-    if (transaction.category && !categories.has(transaction.category._id)) {
-      categories.set(transaction.category._id, transaction.category);
+
+  for (const trx of localTransactions.value) {
+    if (trx.category && !categories.has(trx.category._id)) {
+      categories.set(trx.category._id, trx.category);
     }
-  });
+  }
+
   return Array.from(categories.values());
 });
 
@@ -500,10 +501,32 @@ const editTransaction = (transaction: Transaction) => {
   emit("edit-transaction", transaction);
 };
 
-const deleteTransaction = (transactionId: string) => {
-  if (confirm("Are you sure you want to delete this transaction?")) {
-    emit("delete-transaction", transactionId);
-    showSuccessToast("Transaction deleted successfully");
+const deleteTransaction = async (transactionId: string) => {
+  if (!confirm("Are you sure you want to delete this transaction?")) {
+    return;
+  }
+
+  isLoading.value = true;
+
+  try {
+    const response = await fetchWithAuth(
+      `${import.meta.env.VITE_BACKEND_URL}/v1/transactions/${transactionId}`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (response.ok) {
+      await fetchTransactions(1);
+      emit("delete-transaction", transactionId);
+      showSuccessToast("Transaction deleted successfully");
+    } else {
+      const error = await response.json();
+      showErrorToast(error.message || "Failed to delete transaction");
+    }
+  } catch (error) {
+    console.error("Error deleting transaction:", error);
+    showErrorToast("An error occurred while deleting transaction");
   }
 };
 
