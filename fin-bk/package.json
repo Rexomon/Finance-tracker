@@ -16,7 +16,7 @@
     "drizzle-orm": "^0.45.2",
     "elysia": "^1.4.28",
     "elysia-rate-limit": "^4.6.2",
-    "ioredis": "^5.11.0"
+    "ioredis": "^5.11.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",

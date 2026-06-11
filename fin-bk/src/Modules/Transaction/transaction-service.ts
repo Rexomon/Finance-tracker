@@ -93,7 +93,11 @@ export const transactionListService = async ({
 
     const transactions = dataResult.map((item) => ({
       _id: item.transaction.id,
-      category: item.category,
+      category: {
+        _id: item.category.id,
+        categoryName: item.category.categoryName,
+        type: item.category.type,
+      },
       amount: item.transaction.amount,
       type: item.transaction.type,
       description: item.transaction.description,
