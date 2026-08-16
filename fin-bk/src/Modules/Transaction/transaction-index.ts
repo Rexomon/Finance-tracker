@@ -5,18 +5,18 @@ import { redis } from "../../Config/Redis";
 import Auth from "../../Middleware/Auth";
 
 import { RedisLock } from "../../Utils/RedisLocking";
-import { handleError } from "../../Utils/ErrorHandling";
+import { tryCatch, handleError } from "../../Utils/ErrorHandling";
 import {
   invalidateUserBudgetCache,
   invalidateUserTransactionCache,
 } from "../../Utils/RedisCache";
 
 import {
-  transactionListService,
-  transactionCreateService,
-  transactionDeleteService,
-  transactionUpdateService,
-  transactionSummaryService,
+  listTransactionService,
+  createTransactionService,
+  deleteTransactionService,
+  updateTransactionService,
+  getTransactionSummaryService,
 } from "./transaction-service";
 
 import {
@@ -44,37 +44,47 @@ const TransactionRoutes = new Elysia({
     async ({
       status,
       lock,
-      user: { id },
+      user: { id: userId },
       body: { category, amount, type, description, date },
     }) => {
-      const userId = id;
-      const data = { userId, category, amount, type, description, date };
+      const transactionCreationInput = {
+        userId,
+        category,
+        amount,
+        type,
+        description,
+        date,
+      };
+      const lockKey = `CreateTransaction:${userId}:${category}:${type}:${date}`;
 
-      try {
-        const lockKey = `CreateTransaction:${userId}:${category}:${type}:${date}`;
-        await lock.acquire(lockKey);
-
-        const transactionResponse = await transactionCreateService(data);
-        if (transactionResponse.code === 201) {
-          const cacheKeysToDelete = [
-            invalidateUserTransactionCache(userId),
-            redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
-          ];
-          if (type === "expense") {
-            cacheKeysToDelete.push(invalidateUserBudgetCache(userId));
-          }
-
-          await Promise.all(cacheKeysToDelete);
-        }
-
-        return status(transactionResponse.code, {
-          message: transactionResponse.message,
-        });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
+      const lockResult = await tryCatch(() => lock.acquire(lockKey));
+      if (!lockResult.success) {
+        const { code, message } = handleError(lockResult.error);
         return status(code, { message });
       }
+
+      const transactionCreationResult = await createTransactionService(
+        transactionCreationInput,
+      );
+      if (!transactionCreationResult.success) {
+        return status(transactionCreationResult.error.code, {
+          message: transactionCreationResult.error.message,
+        });
+      }
+
+      const cacheInvalidationPromises = [
+        invalidateUserTransactionCache(userId),
+        redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
+      ];
+      if (type === "expense") {
+        cacheInvalidationPromises.push(invalidateUserBudgetCache(userId));
+      }
+
+      await Promise.all(cacheInvalidationPromises);
+
+      return status(transactionCreationResult.data.code, {
+        message: transactionCreationResult.data.message,
+      });
     },
     { body: TransactionSchema, auth: true },
   )
@@ -82,90 +92,76 @@ const TransactionRoutes = new Elysia({
   // Get all transactions for a user
   .get(
     "",
-    async ({ status, user: { id }, query: { page, pageSize } }) => {
-      const userId = id;
+    async ({ status, user: { id: userId }, query: { page, pageSize } }) => {
+      const cacheKey = `transactions:${userId}:${page}:${pageSize}`;
 
-      try {
-        const cacheKey = `transactions:${userId}:${page}:${pageSize}`;
-
-        const cachedTransactions = await redis.get(cacheKey);
-        if (cachedTransactions) {
-          return status(200, {
-            message: "Transactions retrieved successfully",
-            transactions: JSON.parse(cachedTransactions),
-          });
-        }
-
-        const transactionResponse = await transactionListService({
-          userId,
-          page,
-          pageSize,
+      const cachedTransactions = await redis.get(cacheKey);
+      if (cachedTransactions) {
+        return status(200, {
+          message: "Transactions retrieved successfully",
+          transactions: JSON.parse(cachedTransactions),
         });
-        if (transactionResponse.code !== 200) {
-          return status(transactionResponse.code, {
-            message: transactionResponse.message,
-          });
-        }
-
-        await redis.set(
-          cacheKey,
-          JSON.stringify(transactionResponse.transactions),
-          "EX",
-          TRANSACTION_CACHE_EXPIRY,
-        );
-
-        return status(transactionResponse.code, {
-          message: transactionResponse.message,
-          transactions: transactionResponse.transactions,
-        });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
-        return status(code, { message });
       }
+
+      const transactionListResult = await listTransactionService({
+        userId,
+        page,
+        pageSize,
+      });
+      if (!transactionListResult.success) {
+        return status(transactionListResult.error.code, {
+          message: transactionListResult.error.message,
+        });
+      }
+
+      await redis.set(
+        cacheKey,
+        JSON.stringify(transactionListResult.data.transactions),
+        "EX",
+        TRANSACTION_CACHE_EXPIRY,
+      );
+
+      return status(transactionListResult.data.code, {
+        message: transactionListResult.data.message,
+        transactions: transactionListResult.data.transactions,
+      });
     },
     { query: TransactionQuerySchema, auth: true },
   )
 
   .get(
     "/summary",
-    async ({ status, user: { id } }) => {
-      const userId = id;
+    async ({ status, user: { id: userId } }) => {
+      const cacheKey = `${TRANSACTION_SUMMARY_PREFIX}${userId}`;
 
-      try {
-        const cacheKey = `${TRANSACTION_SUMMARY_PREFIX}${userId}`;
-
-        const cachedSummary = await redis.get(cacheKey);
-        if (cachedSummary) {
-          return status(200, {
-            message: "Transactions summary retrieved successfully",
-            transactionSummary: JSON.parse(cachedSummary),
-          });
-        }
-
-        const transactionResponse = await transactionSummaryService({ userId });
-        if (transactionResponse.code !== 200) {
-          return status(transactionResponse.code, {
-            message: transactionResponse.message,
-          });
-        }
-
-        await redis.set(
-          cacheKey,
-          JSON.stringify(transactionResponse.summary),
-          "EX",
-          1800,
-        );
-
-        return status(transactionResponse.code, {
-          message: transactionResponse.message,
-          transactionSummary: transactionResponse.summary,
+      const cachedSummary = await redis.get(cacheKey);
+      if (cachedSummary) {
+        return status(200, {
+          message: "Transactions summary retrieved successfully",
+          transactionSummary: JSON.parse(cachedSummary),
         });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
-        return status(code, { message });
       }
+
+      const transactionSummaryResult = await getTransactionSummaryService({
+        userId,
+      });
+      if (!transactionSummaryResult.success) {
+        return status(transactionSummaryResult.error.code, {
+          message: transactionSummaryResult.error.message,
+        });
+      }
+
+      await redis.set(
+        cacheKey,
+        JSON.stringify(transactionSummaryResult.data.summary),
+        "EX",
+        1800,
+      );
+
+      return status(transactionSummaryResult.data.code, {
+        message: transactionSummaryResult.data.message,
+        transactionSummary: transactionSummaryResult.data.summary,
+      });
     },
     { auth: true },
   )
@@ -176,12 +172,11 @@ const TransactionRoutes = new Elysia({
     async ({
       status,
       lock,
-      user: { id },
+      user: { id: userId },
       params: { transactionId },
       body: { category, amount, type, description, date },
     }) => {
-      const userId = id;
-      const filter = {
+      const transactionUpdateInput = {
         transactionId,
         userId,
         category,
@@ -190,30 +185,34 @@ const TransactionRoutes = new Elysia({
         description,
         date,
       };
+      const lockKey = `UpdateTransaction:${userId}:${transactionId}`;
 
-      try {
-        const lockKey = `UpdateTransaction:${userId}:${transactionId}`;
-        await lock.acquire(lockKey);
-
-        const transactionResponse = await transactionUpdateService(filter);
-        if (transactionResponse.code === 200) {
-          const cacheKeysToDelete = [
-            invalidateUserBudgetCache(userId),
-            invalidateUserTransactionCache(userId),
-            redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
-          ];
-
-          await Promise.all(cacheKeysToDelete);
-        }
-
-        return status(transactionResponse.code, {
-          message: transactionResponse.message,
-        });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
+      const lockResult = await tryCatch(() => lock.acquire(lockKey));
+      if (!lockResult.success) {
+        const { code, message } = handleError(lockResult.error);
         return status(code, { message });
       }
+
+      const transactionUpdateResult = await updateTransactionService(
+        transactionUpdateInput,
+      );
+      if (!transactionUpdateResult.success) {
+        return status(transactionUpdateResult.error.code, {
+          message: transactionUpdateResult.error.message,
+        });
+      }
+
+      const cacheInvalidationPromises = [
+        invalidateUserBudgetCache(userId),
+        invalidateUserTransactionCache(userId),
+        redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
+      ];
+
+      await Promise.all(cacheInvalidationPromises);
+
+      return status(transactionUpdateResult.data.code, {
+        message: transactionUpdateResult.data.message,
+      });
     },
     { body: TransactionSchema, params: TransactionIdSchema, auth: true },
   )
@@ -221,35 +220,43 @@ const TransactionRoutes = new Elysia({
   // Delete a transaction by ID
   .delete(
     "/:transactionId",
-    async ({ status, lock, user: { id }, params: { transactionId } }) => {
-      const userId = id;
-      const filter = { transactionId, userId };
+    async ({
+      status,
+      lock,
+      user: { id: userId },
+      params: { transactionId },
+    }) => {
+      const transactionDeletionInput = { transactionId, userId };
+      const lockKey = `DeleteTransaction:${userId}:${transactionId}`;
 
-      try {
-        const lockKey = `DeleteTransaction:${userId}:${transactionId}`;
-        await lock.acquire(lockKey);
-
-        const transactionResponse = await transactionDeleteService(filter);
-        if (transactionResponse.code === 200) {
-          const cacheKeysToDelete = [
-            invalidateUserTransactionCache(userId),
-            redis.del(`transaction_summary:${userId}`),
-          ];
-          if (transactionResponse.deletedType === "expense") {
-            cacheKeysToDelete.push(invalidateUserBudgetCache(userId));
-          }
-
-          await Promise.all(cacheKeysToDelete);
-        }
-
-        return status(transactionResponse.code, {
-          message: transactionResponse.message,
-        });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
+      const lockResult = await tryCatch(() => lock.acquire(lockKey));
+      if (!lockResult.success) {
+        const { code, message } = handleError(lockResult.error);
         return status(code, { message });
       }
+
+      const transactionDeletionResult = await deleteTransactionService(
+        transactionDeletionInput,
+      );
+      if (!transactionDeletionResult.success) {
+        return status(transactionDeletionResult.error.code, {
+          message: transactionDeletionResult.error.message,
+        });
+      }
+
+      const cacheInvalidationPromises = [
+        invalidateUserTransactionCache(userId),
+        redis.del(`transaction_summary:${userId}`),
+      ];
+      if (transactionDeletionResult.data.deletedType === "expense") {
+        cacheInvalidationPromises.push(invalidateUserBudgetCache(userId));
+      }
+
+      await Promise.all(cacheInvalidationPromises);
+
+      return status(transactionDeletionResult.data.code, {
+        message: transactionDeletionResult.data.message,
+      });
     },
     { params: TransactionIdSchema, auth: true },
   );

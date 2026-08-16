@@ -13,17 +13,17 @@ import type {
   TCategoryDeleteQuery,
 } from "./category-types";
 
-export function getExistingCategory({
+export function getExistingCategoryQuery({
   categoryId,
   userId,
   categoryName,
-  filter,
-}: TCategoryExistQuery & { filter?: "notEqual" | "equal" }) {
+  matchMode,
+}: TCategoryExistQuery & { matchMode?: "notEqual" | "equal" }) {
   const conditions = [eq(category.userId, userId)];
 
-  if (categoryId && filter === "notEqual")
+  if (categoryId && matchMode === "notEqual")
     conditions.push(ne(category.id, categoryId));
-  if (categoryId && filter === "equal")
+  if (categoryId && matchMode === "equal")
     conditions.push(eq(category.id, categoryId));
 
   if (categoryName) conditions.push(eq(category.categoryName, categoryName));
@@ -35,7 +35,7 @@ export function getExistingCategory({
     .limit(1);
 }
 
-export function categoryCreateQuery({
+export function createCategoryQuery({
   userId,
   categoryName,
   type,
@@ -43,7 +43,7 @@ export function categoryCreateQuery({
   return db.insert(category).values({ userId, categoryName, type });
 }
 
-export function categoryListQuery({ userId, type }: TCategoryListQuery) {
+export function listCategoryQuery({ userId, type }: TCategoryListQuery) {
   const conditions = [eq(category.userId, userId)];
 
   if (type) conditions.push(eq(category.type, type));
@@ -61,23 +61,23 @@ export function categoryListQuery({ userId, type }: TCategoryListQuery) {
     .orderBy(desc(category.createdAt));
 }
 
-export function categoryUpdateQuery({
+export function updateCategoryQuery({
   categoryId,
   userId,
   categoryName,
   type,
 }: TCategoryUpdateQuery) {
-  const sets: TCategoryOptional = {};
-  if (categoryName) sets.categoryName = categoryName;
-  if (type) sets.type = type;
+  const categoryUpdates: TCategoryOptional = {};
+  if (categoryName) categoryUpdates.categoryName = categoryName;
+  if (type) categoryUpdates.type = type;
 
   return db
     .update(category)
-    .set(sets)
+    .set(categoryUpdates)
     .where(and(eq(category.id, categoryId), eq(category.userId, userId)));
 }
 
-export function categoryDeleteQuery({
+export function deleteCategoryQuery({
   categoryId,
   userId,
 }: TCategoryDeleteQuery) {

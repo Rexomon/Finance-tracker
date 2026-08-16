@@ -1,15 +1,20 @@
-import { handleError } from "../../Utils/ErrorHandling";
+import {
+  error,
+  handleError,
+  success,
+  tryCatch,
+} from "../../Utils/ErrorHandling";
 
 import { adjustBudgetForTransaction } from "../Budget/budget-service";
 
-import { getExistingCategory } from "../Category/category-db";
+import { getExistingCategoryQuery } from "../Category/category-db";
 import {
-  getTransactionById,
-  transactionListQuery,
-  transactionCreateQuery,
-  transactionUpdateQuery,
-  transactionDeleteQuery,
-  transactionSummaryQuery,
+  getTransactionByIdQuery,
+  listTransactionQuery,
+  createTransactionQuery,
+  updateTransactionQuery,
+  deleteTransactionQuery,
+  getTransactionSummaryQuery,
 } from "./transaction-db";
 
 import type {
@@ -20,7 +25,7 @@ import type {
   TTransactionDelete,
 } from "./transaction-types";
 
-export const transactionCreateService = async ({
+export const createTransactionService = async ({
   userId,
   category,
   amount,
@@ -28,197 +33,224 @@ export const transactionCreateService = async ({
   description,
   date,
 }: TTransactionCreate) => {
-  try {
-    const [existingCategory] = await getExistingCategory({
+  const existingCategoryResult = await tryCatch(async () => {
+    const [existingCategory] = await getExistingCategoryQuery({
       categoryId: category,
       userId,
-      filter: "equal",
+      matchMode: "equal",
     });
-    if (!existingCategory) {
-      return { code: 404, message: "Category not found" };
-    }
 
-    // Deduct budget limit if the transaction is an expense
-    if (type === "expense") {
-      const deductBudgetLimit = await adjustBudgetForTransaction(
-        userId,
-        category,
-        date,
-        amount,
-        "deducted",
-      );
-      if (deductBudgetLimit.code !== 200) {
-        return {
-          code: deductBudgetLimit.code,
-          message: deductBudgetLimit.message,
-        };
-      }
-    }
-
-    const transactionData = {
-      category,
-      amount,
-      type,
-      description,
-      date,
-    };
-
-    await transactionCreateQuery(transactionData);
-
-    return {
-      code: 201,
-      message: "Transaction created successfully",
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    return existingCategory;
+  });
+  if (!existingCategoryResult.success) {
+    const { code, message } = handleError(existingCategoryResult.error);
+    return error({ code, message });
   }
+
+  const existingCategory = existingCategoryResult.data;
+  if (!existingCategory) {
+    return error({ code: 404, message: "Category not found" });
+  }
+
+  // Deduct budget limit if the transaction is an expense
+  if (type === "expense") {
+    const budgetDeductionResult = await adjustBudgetForTransaction(
+      userId,
+      category,
+      date,
+      amount,
+      "deducted",
+    );
+    if (!budgetDeductionResult.success) {
+      return error({
+        code: budgetDeductionResult.error.code,
+        message: budgetDeductionResult.error.message,
+      });
+    }
+  }
+
+  const transactionCreationInput = {
+    category,
+    amount,
+    type,
+    description,
+    date,
+  };
+
+  const transactionCreationResult = await tryCatch(() =>
+    createTransactionQuery(transactionCreationInput),
+  );
+  if (!transactionCreationResult.success) {
+    const { code, message } = handleError(transactionCreationResult.error);
+    return error({ code, message });
+  }
+
+  return success({ code: 201, message: "Transaction created successfully" });
 };
 
-export const transactionListService = async ({
+export const listTransactionService = async ({
   userId,
   page,
   pageSize,
 }: TTransactionList) => {
-  try {
-    const queries = transactionListQuery({ userId, page, pageSize });
-    const [countResult, dataResult] = await Promise.all([
-      queries.totalCount,
-      queries.dataResult,
+  const transactionListResult = await tryCatch(async () => {
+    const transactionQueries = listTransactionQuery({ userId, page, pageSize });
+
+    const [[transactionCountRow], transactionRows] = await Promise.all([
+      transactionQueries.transactionCountQuery,
+      transactionQueries.transactionListQuery,
     ]);
 
-    const totalCount = countResult[0]?.totalCount || 0;
-    const totalPages = Math.ceil(totalCount / pageSize) || 0;
+    return { transactionCountRow, transactionRows };
+  });
+  if (!transactionListResult.success) {
+    const { code, message } = handleError(transactionListResult.error);
+    return error({ code, message });
+  }
 
-    const transactions = dataResult.map((item) => ({
-      _id: item.transaction.id,
-      category: {
-        _id: item.category.id,
-        categoryName: item.category.categoryName,
-        type: item.category.type,
-      },
-      amount: item.transaction.amount,
-      type: item.transaction.type,
-      description: item.transaction.description,
-      date: item.transaction.date,
-      createdAt: item.transaction.createdAt,
-      updatedAt: item.transaction.updatedAt,
-    }));
+  const { transactionCountRow, transactionRows } = transactionListResult.data;
+  const totalCount = transactionCountRow.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize) || 0;
 
-    if (totalCount === 0 || page > totalPages) {
-      return {
-        code: 200,
-        message: "No transactions found, or you have not created any",
-        transactions: {
-          metadata: { totalCount, page, pageSize, totalPages },
-          data: [],
-        },
-      };
-    }
+  const transactions = transactionRows.map((transactionRow) => ({
+    _id: transactionRow.transaction.id,
+    category: {
+      _id: transactionRow.category.id,
+      categoryName: transactionRow.category.categoryName,
+      type: transactionRow.category.type,
+    },
+    amount: transactionRow.transaction.amount,
+    type: transactionRow.transaction.type,
+    description: transactionRow.transaction.description,
+    date: transactionRow.transaction.date,
+    createdAt: transactionRow.transaction.createdAt,
+    updatedAt: transactionRow.transaction.updatedAt,
+  }));
 
-    return {
+  if (totalCount === 0 || page > totalPages) {
+    return success({
       code: 200,
-      message: "Transactions retrieved successfully",
+      message: "No transactions found, or you have not created any",
       transactions: {
         metadata: { totalCount, page, pageSize, totalPages },
-        data: transactions,
+        data: [],
       },
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    });
   }
+
+  return success({
+    code: 200,
+    message: "Transactions retrieved successfully",
+    transactions: {
+      metadata: { totalCount, page, pageSize, totalPages },
+      data: transactions,
+    },
+  });
 };
 
-export const transactionSummaryService = async ({
+export const getTransactionSummaryService = async ({
   userId,
 }: TTransactionUserId) => {
-  try {
-    const queries = transactionSummaryQuery({ userId });
+  const transactionSummaryResult = await tryCatch(async () => {
+    const transactionSummaryQueries = getTransactionSummaryQuery({ userId });
 
     const [
-      [currMonthSummary],
-      currMonthExpenseByCategory,
+      [currentMonthSummary],
+      currentMonthExpenseByCategory,
       monthlyTrends,
-      recTransaction,
-      budgets,
+      recentTransactionRows,
+      currentMonthBudgetRows,
     ] = await Promise.all([
-      queries.currentMonthSummary,
-      queries.currentMonthExpenseByCategory,
-      queries.monthlyTrends,
-      queries.recentTransactions,
-      queries.currentMonthBudgets,
+      transactionSummaryQueries.currentMonthSummaryQuery,
+      transactionSummaryQueries.currentMonthExpenseByCategoryQuery,
+      transactionSummaryQueries.monthlyTrendsQuery,
+      transactionSummaryQueries.recentTransactionsQuery,
+      transactionSummaryQueries.currentMonthBudgetsQuery,
     ]);
 
-    const spentMap = new Map<number, number>();
-    for (const crgr of currMonthExpenseByCategory) {
-      spentMap.set(crgr.categoryId, crgr.totalAmount);
-    }
-
-    const budgetStatus = budgets.map((bgt) => {
-      const spent = spentMap.get(bgt.category.id) || 0;
-      const originalLimit = (bgt.budget.limit || 0) + spent;
-
-      return {
-        _id: bgt.budget.id,
-        category: {
-          _id: bgt.category.id,
-          categoryName: bgt.category.categoryName,
-          type: bgt.category.type,
-        },
-        originalLimit: originalLimit,
-        spentAmount: spent,
-        remainingAmount: bgt.budget.limit,
-        usagePercentage:
-          originalLimit > 0 ? Math.min((spent / originalLimit) * 100, 100) : 0,
-      };
-    });
-
-    const recentTransactions = recTransaction.map((tx) => ({
-      _id: tx.transaction.id,
-      category: {
-        _id: tx.category.id,
-        categoryName: tx.category.categoryName,
-        type: tx.category.type,
-      },
-      amount: tx.transaction.amount,
-      type: tx.transaction.type,
-      description: tx.transaction.description,
-      date: tx.transaction.date,
-      createdAt: tx.transaction.createdAt,
-      updatedAt: tx.transaction.updatedAt,
-    }));
-
-    const balance =
-      currMonthSummary.totalIncome - currMonthSummary.totalExpense;
-
-    const summary = {
-      currentMonthSummary: {
-        totalIncome: currMonthSummary.totalIncome || 0,
-        totalExpense: currMonthSummary.totalExpense || 0,
-        balance: balance,
-      },
-      expenseByCategory: currMonthExpenseByCategory,
+    return {
+      currentMonthSummary,
+      currentMonthExpenseByCategory,
       monthlyTrends,
-      recentTransactions,
-      budgetStatus,
+      recentTransactionRows,
+      currentMonthBudgetRows,
     };
+  });
+  if (!transactionSummaryResult.success) {
+    const { code, message } = handleError(transactionSummaryResult.error);
+    return error({ code, message });
+  }
+
+  const {
+    currentMonthSummary,
+    currentMonthExpenseByCategory,
+    monthlyTrends,
+    recentTransactionRows,
+    currentMonthBudgetRows,
+  } = transactionSummaryResult.data;
+
+  const spentMap = new Map<number, number>();
+  for (const categoryExpense of currentMonthExpenseByCategory) {
+    spentMap.set(categoryExpense.categoryId, categoryExpense.totalAmount);
+  }
+
+  const budgetStatuses = currentMonthBudgetRows.map((budgetRow) => {
+    const spent = spentMap.get(budgetRow.category.id) || 0;
+    const originalLimit = (budgetRow.budget.limit || 0) + spent;
 
     return {
-      code: 200,
-      message: "Transactions summary retrieved successfully",
-      summary,
+      _id: budgetRow.budget.id,
+      category: {
+        _id: budgetRow.category.id,
+        categoryName: budgetRow.category.categoryName,
+        type: budgetRow.category.type,
+      },
+      originalLimit: originalLimit,
+      spentAmount: spent,
+      remainingAmount: budgetRow.budget.limit,
+      usagePercentage:
+        originalLimit > 0 ? Math.min((spent / originalLimit) * 100, 100) : 0,
     };
-  } catch (error) {
-    const { code, message } = handleError(error);
+  });
 
-    return { code, message };
-  }
+  const recentTransactions = recentTransactionRows.map((transactionRow) => ({
+    _id: transactionRow.transaction.id,
+    category: {
+      _id: transactionRow.category.id,
+      categoryName: transactionRow.category.categoryName,
+      type: transactionRow.category.type,
+    },
+    amount: transactionRow.transaction.amount,
+    type: transactionRow.transaction.type,
+    description: transactionRow.transaction.description,
+    date: transactionRow.transaction.date,
+    createdAt: transactionRow.transaction.createdAt,
+    updatedAt: transactionRow.transaction.updatedAt,
+  }));
+
+  const balance =
+    currentMonthSummary.totalIncome - currentMonthSummary.totalExpense;
+
+  const summary = {
+    currentMonthSummary: {
+      totalIncome: currentMonthSummary.totalIncome || 0,
+      totalExpense: currentMonthSummary.totalExpense || 0,
+      balance: balance,
+    },
+    expenseByCategory: currentMonthExpenseByCategory,
+    monthlyTrends,
+    recentTransactions,
+    budgetStatus: budgetStatuses,
+  };
+
+  return success({
+    code: 200,
+    message: "Transactions summary retrieved successfully",
+    summary,
+  });
 };
 
-export const transactionUpdateService = async ({
+export const updateTransactionService = async ({
   transactionId,
   userId,
   category,
@@ -227,149 +259,166 @@ export const transactionUpdateService = async ({
   description,
   date,
 }: TTransactionUpdate) => {
-  try {
+  const transactionUpdateValidationResult = await tryCatch(async () => {
     const [[existingTransaction], [existingCategory]] = await Promise.all([
-      getTransactionById({
+      getTransactionByIdQuery({
         transactionId,
         userId,
       }),
-      getExistingCategory({
+      getExistingCategoryQuery({
         categoryId: category,
         userId,
-        filter: "equal",
+        matchMode: "equal",
       }),
     ]);
 
-    if (!existingTransaction) {
-      return { code: 404, message: "Transaction not found" };
+    return { existingTransaction, existingCategory };
+  });
+  if (!transactionUpdateValidationResult.success) {
+    const { code, message } = handleError(
+      transactionUpdateValidationResult.error,
+    );
+    return error({ code, message });
+  }
+
+  const { existingTransaction, existingCategory } =
+    transactionUpdateValidationResult.data;
+  if (!existingTransaction) {
+    return error({ code: 404, message: "Transaction not found" });
+  }
+  if (!existingCategory) {
+    return error({ code: 404, message: "Category not found" });
+  }
+
+  const oldType = existingTransaction.type;
+  const newType = type;
+
+  // Return budget limit if the old transaction is an expense
+  if (oldType === "expense") {
+    const budgetRefundResult = await adjustBudgetForTransaction(
+      userId,
+      existingTransaction.categoryId,
+      existingTransaction.date,
+      existingTransaction.amount,
+      "refunded",
+    );
+    if (!budgetRefundResult.success) {
+      return error({
+        code: budgetRefundResult.error.code,
+        message: budgetRefundResult.error.message,
+      });
     }
-    if (!existingCategory) {
-      return { code: 404, message: "Category not found" };
-    }
+  }
 
-    const oldType = existingTransaction.type;
-    const newType = type;
-
-    // Return budget limit if the old transaction is an expense
-    if (oldType === "expense") {
-      const returnResult = await adjustBudgetForTransaction(
-        userId,
-        existingTransaction.categoryId,
-        existingTransaction.date,
-        existingTransaction.amount,
-        "refunded",
-      );
-      if (returnResult.code !== 200) {
-        return {
-          code: returnResult.code,
-          message: returnResult.message,
-        };
-      }
-    }
-
-    // Deduct budget limit if the new transaction is an expense
-    if (newType === "expense") {
-      const deductResult = await adjustBudgetForTransaction(
-        userId,
-        category,
-        date,
-        amount,
-        "deducted",
-      );
-
-      if (deductResult.code !== 200) {
-        // Deduction failed. Revert the previous budget adjustment.
-        if (oldType === "expense") {
-          const reDeductResult = await adjustBudgetForTransaction(
-            userId,
-            existingTransaction.categoryId,
-            existingTransaction.date,
-            existingTransaction.amount,
-            "deducted",
-          );
-          if (reDeductResult.code !== 200) {
-            return {
-              code: reDeductResult.code,
-              message: reDeductResult.message,
-            };
-          }
-        }
-
-        return {
-          code: deductResult.code,
-          message: deductResult.message,
-        };
-      }
-    }
-
-    const updatedTransaction = {
+  // Deduct budget limit if the new transaction is an expense
+  if (newType === "expense") {
+    const budgetDeductionResult = await adjustBudgetForTransaction(
+      userId,
       category,
-      amount,
-      type,
-      description,
       date,
-    };
+      amount,
+      "deducted",
+    );
 
-    await transactionUpdateQuery({
+    if (!budgetDeductionResult.success) {
+      // Deduction failed. Revert the previous budget adjustment.
+      if (oldType === "expense") {
+        const budgetRollbackResult = await adjustBudgetForTransaction(
+          userId,
+          existingTransaction.categoryId,
+          existingTransaction.date,
+          existingTransaction.amount,
+          "deducted",
+        );
+        if (!budgetRollbackResult.success) {
+          return error({
+            code: budgetRollbackResult.error.code,
+            message: budgetRollbackResult.error.message,
+          });
+        }
+      }
+
+      return error({
+        code: budgetDeductionResult.error.code,
+        message: budgetDeductionResult.error.message,
+      });
+    }
+  }
+
+  const transactionUpdateInput = {
+    category,
+    amount,
+    type,
+    description,
+    date,
+  };
+
+  const transactionUpdateResult = await tryCatch(() =>
+    updateTransactionQuery({
       transactionId,
       userId,
-      ...updatedTransaction,
-    });
-
-    return {
-      code: 200,
-      message: "Transaction updated successfully",
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+      ...transactionUpdateInput,
+    }),
+  );
+  if (!transactionUpdateResult.success) {
+    const { code, message } = handleError(transactionUpdateResult.error);
+    return error({ code, message });
   }
+
+  return success({
+    code: 200,
+    message: "Transaction updated successfully",
+  });
 };
 
-export const transactionDeleteService = async ({
+export const deleteTransactionService = async ({
   transactionId,
   userId,
 }: TTransactionDelete) => {
-  try {
-    const [existingTransaction] = await getTransactionById({
-      transactionId,
-      userId,
-    });
-    if (!existingTransaction) {
-      return { code: 404, message: "Transaction not found" };
-    }
-
-    if (existingTransaction.type === "expense") {
-      const returnResult = await adjustBudgetForTransaction(
-        userId,
-        existingTransaction.categoryId,
-        existingTransaction.date,
-        existingTransaction.amount,
-        "refunded",
-      );
-
-      if (returnResult.code !== 200) {
-        return {
-          code: returnResult.code,
-          message: returnResult.message,
-        };
-      }
-    }
-
-    await transactionDeleteQuery({
+  const existingTransactionResult = await tryCatch(async () => {
+    const [existingTransaction] = await getTransactionByIdQuery({
       transactionId,
       userId,
     });
 
-    return {
-      code: 200,
-      message: "Transaction deleted successfully",
-      deletedType: existingTransaction.type,
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    return existingTransaction;
+  });
+  if (!existingTransactionResult.success) {
+    return error({ code: 404, message: "Transaction not found" });
   }
+
+  const existingTransaction = existingTransactionResult.data;
+  if (existingTransaction.type === "expense") {
+    const budgetRefundResult = await adjustBudgetForTransaction(
+      userId,
+      existingTransaction.categoryId,
+      existingTransaction.date,
+      existingTransaction.amount,
+      "refunded",
+    );
+
+    if (!budgetRefundResult.success) {
+      return error({
+        code: budgetRefundResult.error.code,
+        message: budgetRefundResult.error.message,
+      });
+    }
+  }
+
+  const transactionDeletionResult = await tryCatch(() =>
+    deleteTransactionQuery({
+      transactionId,
+      userId,
+    }),
+  );
+  if (!transactionDeletionResult.success) {
+    const { code, message } = handleError(transactionDeletionResult.error);
+    return error({ code, message });
+  }
+
+  return success({
+    code: 200,
+    message: "Transaction deleted successfully",
+    deletedType: existingTransaction.type,
+  });
 };

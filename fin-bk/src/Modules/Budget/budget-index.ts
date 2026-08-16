@@ -5,14 +5,14 @@ import { redis } from "../../Config/Redis";
 import Auth from "../../Middleware/Auth";
 
 import { RedisLock } from "../../Utils/RedisLocking";
-import { handleError } from "../../Utils/ErrorHandling";
+import { tryCatch, handleError } from "../../Utils/ErrorHandling";
 import { invalidateUserBudgetCache } from "../../Utils/RedisCache";
 
 import {
-  budgetListService,
-  budgetCreateService,
-  budgetUpdateService,
-  budgetDeleteService,
+  listBudgetService,
+  createBudgetService,
+  updateBudgetService,
+  deleteBudgetService,
 } from "./budget-service";
 
 import {
@@ -41,32 +41,32 @@ const BudgetRoutes = new Elysia({
     async ({
       status,
       lock,
-      user: { id },
+      user: { id: userId },
       body: { category, limit, month, year },
     }) => {
-      const userId = id;
-      const data = { userId, category, limit, month, year };
+      const budgetCreationInput = { userId, category, limit, month, year };
 
-      try {
-        const lockKey = `CreateBudget:${userId}:${category}:${month}:${year}`;
-        await lock.acquire(lockKey);
+      const lockKey = `CreateBudget:${userId}:${category}:${month}:${year}`;
+      await lock.acquire(lockKey);
 
-        const budgetResponse = await budgetCreateService(data);
-        if (budgetResponse.code === 201) {
-          const cacheKeysToDelete = [
-            invalidateUserBudgetCache(userId),
-            redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
-          ];
-
-          await Promise.all(cacheKeysToDelete);
-        }
-
-        return status(budgetResponse.code, { message: budgetResponse.message });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
-        return status(code, { message });
+      const budgetCreationResult =
+        await createBudgetService(budgetCreationInput);
+      if (!budgetCreationResult.success) {
+        return status(budgetCreationResult.error.code, {
+          message: budgetCreationResult.error.message,
+        });
       }
+
+      const cacheInvalidationPromises = [
+        invalidateUserBudgetCache(userId),
+        redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
+      ];
+
+      await Promise.all(cacheInvalidationPromises);
+
+      return status(budgetCreationResult.data.code, {
+        message: budgetCreationResult.data.message,
+      });
     },
     { body: BudgetSchema, auth: true },
   )
@@ -76,46 +76,38 @@ const BudgetRoutes = new Elysia({
     "",
     async ({
       status,
-      user: { id },
+      user: { id: userId },
       query: { page, pageSize, month, year },
     }) => {
-      const userId = id;
-      const filter = { userId, page, pageSize, month, year };
+      const budgetListInput = { userId, page, pageSize, month, year };
+      const cacheKey = `budgets:${userId}:${page}:${pageSize}:${month ?? "all"}:${year ?? "all"}`;
 
-      try {
-        const cacheKey = `budgets:${userId}:${page}:${pageSize}:${month ?? "all"}:${year ?? "all"}`;
-
-        const cachedBudgets = await redis.get(cacheKey);
-        if (cachedBudgets) {
-          return status(200, {
-            message: "Budgets retrieved successfully",
-            budgets: JSON.parse(cachedBudgets),
-          });
-        }
-
-        const budgetResponse = await budgetListService(filter);
-        if (budgetResponse.code !== 200) {
-          return status(budgetResponse.code, {
-            message: budgetResponse.message,
-          });
-        }
-
-        await redis.set(
-          cacheKey,
-          JSON.stringify(budgetResponse.budgets),
-          "EX",
-          BUDGET_CACHE_EXPIRY,
-        );
-
-        return status(budgetResponse.code, {
-          message: budgetResponse.message,
-          budgets: budgetResponse.budgets,
+      const cachedBudgets = await redis.get(cacheKey);
+      if (cachedBudgets) {
+        return status(200, {
+          message: "Budgets retrieved successfully",
+          budgets: JSON.parse(cachedBudgets),
         });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
-        return status(code, { message });
       }
+
+      const budgetListResult = await listBudgetService(budgetListInput);
+      if (!budgetListResult.success) {
+        return status(budgetListResult.error.code, {
+          message: budgetListResult.error.message,
+        });
+      }
+
+      await redis.set(
+        cacheKey,
+        JSON.stringify(budgetListResult.data.budgets),
+        "EX",
+        BUDGET_CACHE_EXPIRY,
+      );
+
+      return status(budgetListResult.data.code, {
+        message: budgetListResult.data.message,
+        budgets: budgetListResult.data.budgets,
+      });
     },
     { query: BudgetQuerySchema, auth: true },
   )
@@ -126,35 +118,43 @@ const BudgetRoutes = new Elysia({
     async ({
       status,
       lock,
-      user: { id },
+      user: { id: userId },
       params: { budgetId },
       body: { category, limit, month, year },
     }) => {
-      const userId = id;
-      const filter = { budgetId, userId, category, limit, month, year };
+      const budgetUpdateInput = {
+        budgetId,
+        userId,
+        category,
+        limit,
+        month,
+        year,
+      };
+      const lockKey = `UpdateBudget:${budgetId}:${userId}`;
 
-      try {
-        const lockKey = `UpdateBudget:${budgetId}:${userId}`;
-        await lock.acquire(lockKey);
-
-        const budgetResponse = await budgetUpdateService(filter);
-        if (budgetResponse.code === 200) {
-          const cacheKeysToDelete = [
-            invalidateUserBudgetCache(userId),
-            redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
-          ];
-
-          await Promise.all(cacheKeysToDelete);
-        }
-
-        return status(budgetResponse.code, {
-          message: budgetResponse.message,
-        });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
+      const lockResult = await tryCatch(() => lock.acquire(lockKey));
+      if (!lockResult.success) {
+        const { code, message } = handleError(lockResult.error);
         return status(code, { message });
       }
+
+      const budgetUpdateResult = await updateBudgetService(budgetUpdateInput);
+      if (!budgetUpdateResult.success) {
+        return status(budgetUpdateResult.error.code, {
+          message: budgetUpdateResult.error.message,
+        });
+      }
+
+      const cacheInvalidationPromises = [
+        invalidateUserBudgetCache(userId),
+        redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
+      ];
+
+      await Promise.all(cacheInvalidationPromises);
+
+      return status(budgetUpdateResult.data.code, {
+        message: budgetUpdateResult.data.message,
+      });
     },
     { body: BudgetOptionalSchema, params: BudgetIdSchema, auth: true },
   )
@@ -162,32 +162,33 @@ const BudgetRoutes = new Elysia({
   // Delete a budget by ID
   .delete(
     "/:budgetId",
-    async ({ status, lock, user: { id }, params: { budgetId } }) => {
-      const userId = id;
-      const filter = { budgetId, userId };
+    async ({ status, lock, user: { id: userId }, params: { budgetId } }) => {
+      const budgetDeletionInput = { budgetId, userId };
+      const lockKey = `DeleteBudget:${budgetId}:${userId}`;
 
-      try {
-        const lockKey = `DeleteBudget:${budgetId}:${userId}`;
-        await lock.acquire(lockKey);
-
-        const budgetResponse = await budgetDeleteService(filter);
-        if (budgetResponse.code === 200) {
-          const cacheKeysToDelete = [
-            invalidateUserBudgetCache(userId),
-            redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
-          ];
-
-          await Promise.all(cacheKeysToDelete);
-        }
-
-        return status(budgetResponse.code, {
-          message: budgetResponse.message,
-        });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
+      const lockResult = await tryCatch(() => lock.acquire(lockKey));
+      if (!lockResult.success) {
+        const { code, message } = handleError(lockResult.error);
         return status(code, { message });
       }
+
+      const budgetDeletionResult =
+        await deleteBudgetService(budgetDeletionInput);
+      if (!budgetDeletionResult.success) {
+        return status(budgetDeletionResult.error.code, {
+          message: budgetDeletionResult.error.message,
+        });
+      }
+
+      const cacheInvalidationPromises = [
+        invalidateUserBudgetCache(userId),
+        redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
+      ];
+
+      await Promise.all(cacheInvalidationPromises);
+      return status(budgetDeletionResult.data.code, {
+        message: budgetDeletionResult.data.message,
+      });
     },
     { params: BudgetIdSchema, auth: true },
   );

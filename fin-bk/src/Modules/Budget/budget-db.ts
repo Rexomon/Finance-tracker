@@ -14,19 +14,20 @@ import type {
   TBudgetByCategory,
 } from "./budget-types";
 
-export function getExistingBudget({
+export function getExistingBudgetQuery({
   budgetId,
   userId,
   category: categoryId,
   month,
   year,
-  filter,
-}: TBudgetExist & { filter?: "notEqual" | "equal" }) {
+  matchMode,
+}: TBudgetExist & { matchMode?: "notEqual" | "equal" }) {
   const conditions = [eq(category.userId, userId)];
 
-  if (budgetId && filter === "notEqual")
+  if (budgetId && matchMode === "notEqual")
     conditions.push(ne(budget.id, budgetId));
-  if (budgetId && filter === "equal") conditions.push(eq(budget.id, budgetId));
+  if (budgetId && matchMode === "equal")
+    conditions.push(eq(budget.id, budgetId));
 
   if (categoryId) conditions.push(eq(category.id, categoryId));
   if (month) conditions.push(eq(budget.month, month));
@@ -48,7 +49,7 @@ export function getExistingBudget({
     .limit(1);
 }
 
-export function getBudgetByCategory({
+export function getBudgetByCategoryQuery({
   userId,
   category: categoryId,
 }: TBudgetByCategory) {
@@ -60,7 +61,7 @@ export function getBudgetByCategory({
     .limit(1);
 }
 
-export function budgetUpdateQuery({
+export function updateBudgetQuery({
   budgetId,
   userId,
   category: categoryId,
@@ -68,7 +69,7 @@ export function budgetUpdateQuery({
   month,
   year,
 }: TBudgetUpdate) {
-  const sets: Omit<TBudgetUpdate, "budgetId" | "userId"> = {};
+  const budgetUpdates: Omit<TBudgetUpdate, "budgetId" | "userId"> = {};
   const conditions = [
     eq(budget.id, budgetId),
     inArray(
@@ -80,18 +81,18 @@ export function budgetUpdateQuery({
     ),
   ];
 
-  if (categoryId) sets.category = categoryId;
-  if (limit) sets.limit = limit;
-  if (month) sets.month = month;
-  if (year) sets.year = year;
+  if (categoryId) budgetUpdates.category = categoryId;
+  if (limit) budgetUpdates.limit = limit;
+  if (month) budgetUpdates.month = month;
+  if (year) budgetUpdates.year = year;
 
   return db
     .update(budget)
-    .set(sets)
+    .set(budgetUpdates)
     .where(and(...conditions));
 }
 
-export function budgetListQuery({
+export function listBudgetQuery({
   userId,
   page,
   pageSize,
@@ -103,13 +104,13 @@ export function budgetListQuery({
   if (month) conditions.push(eq(budget.month, month));
   if (year) conditions.push(eq(budget.year, year));
 
-  const totalCount = db
+  const budgetCountQuery = db
     .select({ totalCount: count(budget.id) })
     .from(budget)
     .innerJoin(category, eq(budget.category, category.id))
     .where(and(...conditions));
 
-  const dataResult = db
+  const budgetListQuery = db
     .select()
     .from(budget)
     .innerJoin(category, eq(budget.category, category.id))
@@ -118,10 +119,10 @@ export function budgetListQuery({
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  return { totalCount, dataResult };
+  return { budgetCountQuery, budgetListQuery };
 }
 
-export function budgetDeleteQuery({ budgetId, userId }: TBudgetDelete) {
+export function deleteBudgetQuery({ budgetId, userId }: TBudgetDelete) {
   return db
     .delete(budget)
     .where(
@@ -138,7 +139,7 @@ export function budgetDeleteQuery({ budgetId, userId }: TBudgetDelete) {
     );
 }
 
-export function budgetCreateQuery(data: TBudgetCreateQuery) {
+export function createBudgetQuery(data: TBudgetCreateQuery) {
   return db.insert(budget).values(data);
 }
 

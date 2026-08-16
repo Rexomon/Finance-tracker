@@ -1,13 +1,18 @@
-import { handleError } from "../../Utils/ErrorHandling";
-
-import { getExistingCategory } from "../Category/category-db";
-import { getExistingTransaction } from "../Transaction/transaction-db";
 import {
-  budgetListQuery,
-  getExistingBudget,
-  budgetCreateQuery,
-  budgetUpdateQuery,
-  budgetDeleteQuery,
+  error,
+  success,
+  tryCatch,
+  handleError,
+} from "../../Utils/ErrorHandling";
+
+import { getExistingCategoryQuery } from "../Category/category-db";
+import { getExistingTransactionQuery } from "../Transaction/transaction-db";
+import {
+  listBudgetQuery,
+  getExistingBudgetQuery,
+  createBudgetQuery,
+  updateBudgetQuery,
+  deleteBudgetQuery,
   adjustBudgetQuery,
 } from "./budget-db";
 
@@ -19,152 +24,128 @@ import type {
   TBudgetOptional,
 } from "./budget-types";
 
-export const budgetCreateService = async ({
+export const createBudgetService = async ({
   userId,
   category: categoryId,
   limit,
   month,
   year,
 }: TBudgetCreate) => {
-  try {
+  const budgetCreationValidationResult = await tryCatch(async () => {
     const [[existingCategory], [existingBudget]] = await Promise.all([
-      getExistingCategory({ categoryId, userId, filter: "equal" }),
-      getExistingBudget({
+      getExistingCategoryQuery({ categoryId, userId, matchMode: "equal" }),
+      getExistingBudgetQuery({
         userId,
         category: categoryId,
         month,
         year,
       }),
     ]);
-    if (!existingCategory) {
-      return { code: 404, message: "Category not found" };
-    }
 
-    if (existingBudget) {
-      return {
-        code: 409,
-        message: "Budget already exists for the category for this date",
-      };
-    }
-
-    const budgetData = {
-      category: categoryId,
-      limit,
-      month,
-      year,
-    };
-
-    await budgetCreateQuery(budgetData);
-
-    return { code: 201, message: "Budget created successfully" };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    return { existingCategory, existingBudget };
+  });
+  if (!budgetCreationValidationResult.success) {
+    const { code, message } = handleError(budgetCreationValidationResult.error);
+    return error({ code, message });
   }
+
+  const { existingCategory, existingBudget } =
+    budgetCreationValidationResult.data;
+  if (!existingCategory) {
+    return error({ code: 404, message: "Category not found" });
+  }
+  if (existingBudget) {
+    return error({
+      code: 409,
+      message: "Budget already exists for the category for this date",
+    });
+  }
+
+  const budgetCreationInput = {
+    category: categoryId,
+    limit,
+    month,
+    year,
+  };
+
+  const budgetCreationResult = await tryCatch(() =>
+    createBudgetQuery(budgetCreationInput),
+  );
+  if (!budgetCreationResult.success) {
+    const { code, message } = handleError(budgetCreationResult.error);
+    return error({ code, message });
+  }
+
+  return success({ code: 201, message: "Budget created successfully" });
 };
 
-export const budgetListService = async ({
+export const listBudgetService = async ({
   userId,
   page,
   pageSize,
   month,
   year,
-}: TBudgetList): Promise<
-  | {
-      code: 429 | 500;
-      message: string;
-    }
-  | {
-      code: 200;
-      message: "Budgets retrieved successfully";
-      budgets: {
-        metadata: {
-          totalCount: number;
-          page: number;
-          pageSize: number;
-          totalPages: number;
-        };
-        data: {
-          _id: number;
-          category: {
-            _id: number;
-            categoryName: string;
-            type: "income" | "expense";
-          };
-          limit: number;
-          month: number;
-          year: number;
-          createdAt: Date;
-          updatedAt: Date;
-        }[];
-      };
-    }
-  | {
-      code: 200;
-      message: "No budgets found, or you have not created any";
-      budgets: {
-        metadata: {
-          totalCount: number;
-          page: number;
-          pageSize: number;
-          totalPages: number;
-        };
-        data: [];
-      };
-    }
-> => {
-  try {
-    const queries = budgetListQuery({ userId, page, pageSize, month, year });
-    const [count, result] = await Promise.all([
-      queries.totalCount,
-      queries.dataResult,
+}: TBudgetList) => {
+  const budgetListResult = await tryCatch(async () => {
+    const budgetQueries = listBudgetQuery({
+      userId,
+      page,
+      pageSize,
+      month,
+      year,
+    });
+    const [[budgetCountRow], budgetRows] = await Promise.all([
+      budgetQueries.budgetCountQuery,
+      budgetQueries.budgetListQuery,
     ]);
 
-    const totalCount = count[0].totalCount || 0;
-    const totalPages = Math.ceil(totalCount / pageSize) || 0;
+    return { budgetCountRow, budgetRows };
+  });
+  if (!budgetListResult.success) {
+    const { code, message } = handleError(budgetListResult.error);
+    return error({ code, message });
+  }
 
-    const budgets = result.map((item) => ({
-      _id: item.budget.id,
-      category: {
-        _id: item.category.id,
-        categoryName: item.category.categoryName,
-        type: item.category.type,
-      },
-      limit: item.budget.limit,
-      month: item.budget.month,
-      year: item.budget.year,
-      createdAt: item.budget.createdAt,
-      updatedAt: item.budget.updatedAt,
-    }));
+  const { budgetCountRow, budgetRows } = budgetListResult.data;
+  const totalCount = budgetCountRow.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize) || 0;
 
-    if (totalPages === 0 || page > totalPages) {
-      return {
-        code: 200,
-        message: "No budgets found, or you have not created any",
-        budgets: {
-          metadata: { totalCount, page, pageSize, totalPages },
-          data: [],
-        },
-      };
-    }
+  const budgets = budgetRows.map((budgetRow) => ({
+    _id: budgetRow.budget.id,
+    category: {
+      _id: budgetRow.category.id,
+      categoryName: budgetRow.category.categoryName,
+      type: budgetRow.category.type,
+    },
+    limit: budgetRow.budget.limit,
+    month: budgetRow.budget.month,
+    year: budgetRow.budget.year,
+    createdAt: budgetRow.budget.createdAt,
+    updatedAt: budgetRow.budget.updatedAt,
+  }));
 
-    return {
+  if (totalPages === 0 || page > totalPages) {
+    return success({
       code: 200,
-      message: "Budgets retrieved successfully",
+      message: "No budgets found, or you have not created any",
       budgets: {
         metadata: { totalCount, page, pageSize, totalPages },
-        data: budgets,
+        data: [],
       },
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    });
   }
+
+  return success({
+    code: 200,
+    message: "Budgets retrieved successfully",
+    budgets: {
+      metadata: { totalCount, page, pageSize, totalPages },
+      data: budgets,
+    },
+  });
 };
 
-export const budgetUpdateService = async ({
+export const updateBudgetService = async ({
   budgetId,
   userId,
   category: categoryId,
@@ -172,129 +153,173 @@ export const budgetUpdateService = async ({
   month,
   year,
 }: TBudgetUpdate) => {
-  try {
-    const [currentBudget] = await getExistingBudget({
+  const currentBudgetResult = await tryCatch(async () => {
+    const [currentBudget] = await getExistingBudgetQuery({
       budgetId,
       userId,
     });
-    if (!currentBudget) {
-      return { code: 404, message: "Budget not found" };
-    }
 
-    // Check if any of category, month, or year is being updated
-    // and the new value is different from the current value
-    const hasCategoryChanged =
-      categoryId && currentBudget.categoryId !== categoryId;
-    const hasMonthChanged = month && currentBudget.month !== month;
-    const hasYearChanged = year && currentBudget.year !== year;
+    return currentBudget;
+  });
 
-    if (hasCategoryChanged || hasMonthChanged || hasYearChanged) {
-      const newCategory = categoryId || currentBudget.categoryId;
-      const newMonth = month || currentBudget.month;
-      const newYear = year || currentBudget.year;
-
-      const [[existingBudget], [existingCategory], [transactionUsingBudget]] =
-        await Promise.all([
-          getExistingBudget({
-            budgetId,
-            userId,
-            category: newCategory,
-            month: newMonth,
-            year: newYear,
-            filter: "notEqual",
-          }),
-          getExistingCategory({
-            categoryId: newCategory,
-            userId,
-            filter: "equal",
-          }),
-          getExistingTransaction({
-            userId,
-            category: currentBudget.categoryId,
-            month: currentBudget.month,
-            year: currentBudget.year,
-          }),
-        ]);
-      if (existingBudget) {
-        return {
-          code: 409,
-          message: "Budget already exists for the category for this date",
-        };
-      }
-      if (!existingCategory) {
-        return { code: 404, message: "Category not found" };
-      }
-      if (transactionUsingBudget) {
-        return {
-          code: 400,
-          message:
-            "Budget cannot be updated as it is being used in transactions",
-        };
-      }
-    }
-
-    if (
-      categoryId === undefined &&
-      limit === undefined &&
-      month === undefined &&
-      year === undefined
-    )
-      return {
-        code: 400,
-        message: "Either category, limit, month, or year must be provided",
-      };
-
-    const updatedData: TBudgetOptional = {};
-    if (categoryId !== undefined) updatedData.category = categoryId;
-    if (limit !== undefined) updatedData.limit = limit;
-    if (month !== undefined) updatedData.month = month;
-    if (year !== undefined) updatedData.year = year;
-
-    await budgetUpdateQuery({ budgetId, userId, ...updatedData });
-
-    return { code: 200, message: "Budget updated successfully" };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+  if (!currentBudgetResult.success) {
+    const { code, message } = handleError(currentBudgetResult.error);
+    return error({ code, message });
   }
+
+  const currentBudget = currentBudgetResult.data;
+  if (!currentBudget) {
+    return error({ code: 404, message: "Budget not found" });
+  }
+
+  // Check if any of category, month, or year is being updated
+  // and the new value is different from the current value
+  const hasCategoryChanged =
+    categoryId && currentBudget.categoryId !== categoryId;
+  const hasMonthChanged = month && currentBudget.month !== month;
+  const hasYearChanged = year && currentBudget.year !== year;
+
+  if (hasCategoryChanged || hasMonthChanged || hasYearChanged) {
+    const newCategory = categoryId || currentBudget.categoryId;
+    const newMonth = month || currentBudget.month;
+    const newYear = year || currentBudget.year;
+
+    const budgetUpdateValidationResult = await tryCatch(async () => {
+      const [
+        [conflictingBudget],
+        [existingCategory],
+        [transactionUsingBudget],
+      ] = await Promise.all([
+        getExistingBudgetQuery({
+          budgetId,
+          userId,
+          category: newCategory,
+          month: newMonth,
+          year: newYear,
+          matchMode: "notEqual",
+        }),
+        getExistingCategoryQuery({
+          categoryId: newCategory,
+          userId,
+          matchMode: "equal",
+        }),
+        getExistingTransactionQuery({
+          userId,
+          category: currentBudget.categoryId,
+          month: currentBudget.month,
+          year: currentBudget.year,
+        }),
+      ]);
+
+      return { conflictingBudget, existingCategory, transactionUsingBudget };
+    });
+    if (!budgetUpdateValidationResult.success) {
+      const { code, message } = handleError(budgetUpdateValidationResult.error);
+      return error({ code, message });
+    }
+
+    const { conflictingBudget, existingCategory, transactionUsingBudget } =
+      budgetUpdateValidationResult.data;
+    if (conflictingBudget) {
+      return error({
+        code: 409,
+        message: "Budget already exists for the category for this date",
+      });
+    }
+    if (!existingCategory) {
+      return error({ code: 404, message: "Category not found" });
+    }
+    if (transactionUsingBudget) {
+      return error({
+        code: 400,
+        message: "Budget cannot be updated as it is being used in transactions",
+      });
+    }
+  }
+
+  if (
+    categoryId === undefined &&
+    limit === undefined &&
+    month === undefined &&
+    year === undefined
+  )
+    return error({
+      code: 400,
+      message: "Either category, limit, month, or year must be provided",
+    });
+
+  const budgetUpdateData: TBudgetOptional = {};
+  if (categoryId !== undefined) budgetUpdateData.category = categoryId;
+  if (limit !== undefined) budgetUpdateData.limit = limit;
+  if (month !== undefined) budgetUpdateData.month = month;
+  if (year !== undefined) budgetUpdateData.year = year;
+
+  const budgetUpdateResult = await tryCatch(() =>
+    updateBudgetQuery({ budgetId, userId, ...budgetUpdateData }),
+  );
+  if (!budgetUpdateResult.success) {
+    const { code, message } = handleError(budgetUpdateResult.error);
+    return error({ code, message });
+  }
+
+  return success({ code: 200, message: "Budget updated successfully" });
 };
 
-export const budgetDeleteService = async ({
+export const deleteBudgetService = async ({
   budgetId,
   userId,
 }: TBudgetDelete) => {
-  try {
-    const [existingBudget] = await getExistingBudget({
+  const existingBudgetResult = await tryCatch(async () => {
+    const [existingBudget] = await getExistingBudgetQuery({
       budgetId,
       userId,
-      filter: "equal",
+      matchMode: "equal",
     });
-    if (!existingBudget) {
-      return { code: 404, message: "Budget not found" };
-    }
 
-    const [transactionUsingBudget] = await getExistingTransaction({
+    return existingBudget;
+  });
+  if (!existingBudgetResult.success) {
+    const { code, message } = handleError(existingBudgetResult.error);
+    return error({ code, message });
+  }
+
+  const existingBudget = existingBudgetResult.data;
+  if (!existingBudget) {
+    return error({ code: 404, message: "Budget not found" });
+  }
+
+  const budgetUsageResult = await tryCatch(async () => {
+    const [transactionUsingBudget] = await getExistingTransactionQuery({
       userId,
       category: existingBudget.categoryId,
       month: existingBudget.month,
       year: existingBudget.year,
     });
-    if (transactionUsingBudget) {
-      return {
-        code: 400,
-        message: "Budget cannot be deleted as it is being used in transactions",
-      };
-    }
 
-    await budgetDeleteQuery({ budgetId, userId });
-
-    return { code: 200, message: "Budget deleted successfully" };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    return transactionUsingBudget;
+  });
+  if (!budgetUsageResult.success) {
+    const { code, message } = handleError(budgetUsageResult.error);
+    return error({ code, message });
   }
+
+  const transactionUsingBudget = budgetUsageResult.data;
+  if (transactionUsingBudget) {
+    return error({
+      code: 400,
+      message: "Budget cannot be deleted as it is being used in transactions",
+    });
+  }
+
+  const budgetDeletionResult = await tryCatch(() =>
+    deleteBudgetQuery({ budgetId, userId }),
+  );
+  if (!budgetDeletionResult.success) {
+    const { code, message } = handleError(budgetDeletionResult.error);
+    return error({ code, message });
+  }
+
+  return success({ code: 200, message: "Budget deleted successfully" });
 };
 
 export const adjustBudgetForTransaction = async (
@@ -303,24 +328,31 @@ export const adjustBudgetForTransaction = async (
   date: Date,
   amount: number,
   status: "refunded" | "deducted",
-): Promise<{
-  code: 200 | 400 | 404 | 429 | 500;
-  message: string;
-}> => {
+) => {
   const month = date.getMonth() + 1;
   const year = date.getFullYear();
 
-  try {
-    const [existingBudget] = await getExistingBudget({
+  const existingBudgetResult = await tryCatch(async () => {
+    const [existingBudget] = await getExistingBudgetQuery({
       userId,
       category: categoryId,
       month,
       year,
     });
 
-    if (!existingBudget) return { code: 404, message: "Budget not found " };
+    return existingBudget;
+  });
+  if (!existingBudgetResult.success) {
+    const { code, message } = handleError(existingBudgetResult.error);
+    return error({ code, message });
+  }
 
-    const [result] = await adjustBudgetQuery(
+  const existingBudget = existingBudgetResult.data;
+  if (!existingBudget)
+    return error({ code: 404, message: "Budget not found" });
+
+  const budgetAdjustmentResult = await tryCatch(async () => {
+    const [budgetAdjustment] = await adjustBudgetQuery(
       userId,
       categoryId,
       month,
@@ -329,22 +361,26 @@ export const adjustBudgetForTransaction = async (
       status,
     );
 
-    if (result) return { code: 200, message: "Budget adjusted successfully" };
-
-    if (!result && status === "deducted") {
-      return {
-        code: 400,
-        message: "You don't have enough budget for this transaction",
-      };
-    }
-
-    return {
-      code: 500,
-      message: "Internal server error: Budget record missing or inconsistent.",
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    return budgetAdjustment;
+  });
+  if (!budgetAdjustmentResult.success) {
+    const { code, message } = handleError(budgetAdjustmentResult.error);
+    return error({ code, message });
   }
+
+  const budgetAdjustment = budgetAdjustmentResult.data;
+  if (budgetAdjustment)
+    return success({ code: 200, message: "Budget adjusted successfully" });
+
+  if (!budgetAdjustment && status === "deducted") {
+    return error({
+      code: 400,
+      message: "You don't have enough budget for this transaction",
+    });
+  }
+
+  return error({
+    code: 500,
+    message: "Internal server error: Budget record missing or inconsistent.",
+  });
 };

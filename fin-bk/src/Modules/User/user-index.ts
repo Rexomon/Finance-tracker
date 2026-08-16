@@ -7,13 +7,13 @@ import Auth from "../../Middleware/Auth";
 import { JwtAccessToken, JwtRefreshToken } from "../../Middleware/Jwt";
 
 import { RedisLock } from "../../Utils/RedisLocking";
-import { handleError } from "../../Utils/ErrorHandling";
+import { handleError, tryCatch } from "../../Utils/ErrorHandling";
 
-import { userLoginService, userRegisterService } from "./user-service";
+import { loginUserService, registerUserService } from "./user-service";
 
 import { UserLoginSchema, UserRegisterSchema } from "./user-types";
 
-import { getUserById } from "./user-db";
+import { userByIdQuery } from "./user-db";
 
 import type { TAuthUser } from "../../Types/types";
 
@@ -44,54 +44,52 @@ const UserRoutes = new Elysia({
       body: { email, password },
       cookie: { AccessToken, RefreshToken },
     }) => {
-      const filter = { email, password };
+      const userLoginInput = { email, password };
 
-      try {
-        const userResponse = await userLoginService(filter);
-        if (userResponse.code !== 200) {
-          return status(userResponse.code, { message: userResponse.message });
-        }
-
-        const [userAccessToken, userRefreshToken] = await Promise.all([
-          JwtAccessToken.sign({
-            user: userResponse.user,
-          }),
-
-          JwtRefreshToken.sign({
-            user: { id: userResponse.user.id },
-          }),
-        ]);
-
-        AccessToken.set({
-          value: userAccessToken,
-          secure: true,
-          httpOnly: true,
-          sameSite: "lax",
-          maxAge: ACCESS_TOKEN_EXPIRY,
-          secrets: Bun.env.COOKIE_SECRET,
+      const userLoginResult = await loginUserService(userLoginInput);
+      if (!userLoginResult.success) {
+        return status(userLoginResult.error.code, {
+          message: userLoginResult.error.message,
         });
-
-        RefreshToken.set({
-          value: userRefreshToken,
-          secure: true,
-          httpOnly: true,
-          sameSite: "lax",
-          maxAge: REFRESH_TOKEN_EXPIRY,
-          secrets: Bun.env.COOKIE_SECRET,
-        });
-
-        const cacheKey = `${REFRESH_TOKEN_PREFIX}${userResponse.user.id}`;
-
-        await redis.set(cacheKey, userRefreshToken, "EX", REFRESH_TOKEN_EXPIRY);
-
-        set.headers["content-type"] = "application/json";
-
-        return status(userResponse.code, { message: userResponse.message });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
-        return status(code, { message });
       }
+
+      const [userAccessToken, userRefreshToken] = await Promise.all([
+        JwtAccessToken.sign({
+          user: userLoginResult.data.user,
+        }),
+
+        JwtRefreshToken.sign({
+          user: { id: userLoginResult.data.user.id },
+        }),
+      ]);
+
+      AccessToken.set({
+        value: userAccessToken,
+        secure: true,
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge: ACCESS_TOKEN_EXPIRY,
+        secrets: Bun.env.COOKIE_SECRET,
+      });
+
+      RefreshToken.set({
+        value: userRefreshToken,
+        secure: true,
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge: REFRESH_TOKEN_EXPIRY,
+        secrets: Bun.env.COOKIE_SECRET,
+      });
+
+      const cacheKey = `${REFRESH_TOKEN_PREFIX}${userLoginResult.data.user.id}`;
+
+      await redis.set(cacheKey, userRefreshToken, "EX", REFRESH_TOKEN_EXPIRY);
+
+      set.headers["content-type"] = "application/json";
+
+      return status(userLoginResult.data.code, {
+        message: userLoginResult.data.message,
+      });
     },
     { body: UserLoginSchema },
   )
@@ -100,20 +98,26 @@ const UserRoutes = new Elysia({
   .post(
     "/register",
     async ({ status, lock, body: { name, email, password } }) => {
-      const data = { name, email, password };
+      const userRegistrationInput = { name, email, password };
+      const lockKey = `UserRegister:${email}`;
 
-      try {
-        const lockKey = `UserRegister:${email}`;
-        await lock.acquire(lockKey);
-
-        const userResponse = await userRegisterService(data);
-
-        return status(userResponse.code, { message: userResponse.message });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
+      const lockResult = await tryCatch(() => lock.acquire(lockKey));
+      if (!lockResult.success) {
+        const { code, message } = handleError(lockResult.error);
         return status(code, { message });
       }
+
+      const registrationResult =
+        await registerUserService(userRegistrationInput);
+      if (!registrationResult.success) {
+        return status(registrationResult.error.code, {
+          message: registrationResult.error.message,
+        });
+      }
+
+      return status(registrationResult.data.code, {
+        message: registrationResult.data.message,
+      });
     },
     { body: UserRegisterSchema },
   )
@@ -122,90 +126,93 @@ const UserRoutes = new Elysia({
   .post(
     "/refresh",
     async ({
-      status,
       set,
+      status,
       lock,
       JwtAccessToken,
       JwtRefreshToken,
       cookie: { AccessToken, RefreshToken },
     }) => {
-      try {
-        const refresh = RefreshToken.value as string;
-        if (!refresh) {
-          return status(401, {
-            message: "Unauthorized: Invalid refresh token",
-          });
-        }
+      const refreshToken = RefreshToken.value as string;
+      if (!refreshToken) {
+        return status(401, { message: "Unauthorized" });
+      }
 
-        const decoded = (await JwtRefreshToken.verify(refresh)) as TAuthUser;
-        if (!decoded) {
-          return status(401, {
-            message: "Unauthorized: Invalid refresh token",
-          });
-        }
+      const refreshTokenPayload = (await JwtRefreshToken.verify(
+        refreshToken,
+      )) as TAuthUser;
+      if (!refreshTokenPayload) {
+        return status(401, { message: "Unauthorized" });
+      }
 
-        const userId = decoded.user.id;
+      const userId = refreshTokenPayload.user.id;
+      const cacheKey = `RefreshToken:${userId}`;
 
-        const cacheKey = `RefreshToken:${userId}`;
-        await lock.acquire(cacheKey);
-
-        const [redisRefreshToken, [user]] = await Promise.all([
-          redis.get(cacheKey),
-          getUserById.execute({ userId }),
-        ]);
-        if (!redisRefreshToken) {
-          return status(401, { message: "Session invalid" });
-        } else if (!user) {
-          return status(401, { message: "Unauthorized" });
-        }
-
-        const refreshBuffer = Buffer.from(refresh);
-        const redisRefreshBuffer = Buffer.from(redisRefreshToken);
-        if (
-          refreshBuffer.length !== redisRefreshBuffer.length ||
-          !timingSafeEqual(refreshBuffer, redisRefreshBuffer)
-        ) {
-          return status(401, { message: "Session invalid" });
-        }
-
-        const [newAccessToken, newRefreshToken] = await Promise.all([
-          JwtAccessToken.sign({
-            user: user,
-          }),
-
-          JwtRefreshToken.sign({
-            user: { id: user.id },
-          }),
-        ]);
-
-        AccessToken.set({
-          value: newAccessToken,
-          secure: true,
-          httpOnly: true,
-          sameSite: "lax",
-          maxAge: ACCESS_TOKEN_EXPIRY,
-          secrets: Bun.env.COOKIE_SECRET,
-        });
-
-        RefreshToken.set({
-          value: newRefreshToken,
-          secure: true,
-          httpOnly: true,
-          sameSite: "lax",
-          maxAge: REFRESH_TOKEN_EXPIRY,
-          secrets: Bun.env.COOKIE_SECRET,
-        });
-
-        await redis.set(cacheKey, newRefreshToken, "EX", REFRESH_TOKEN_EXPIRY);
-
-        set.headers["content-type"] = "application/json";
-
-        return status(200, { message: "Token refreshed successfully" });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
+      const lockResult = await tryCatch(() => lock.acquire(cacheKey));
+      if (!lockResult.success) {
+        const { code, message } = handleError(lockResult.error);
         return status(code, { message });
       }
+
+      const sessionResult = await tryCatch(async () => {
+        const [redisRefreshToken, [user]] = await Promise.all([
+          redis.get(cacheKey),
+          userByIdQuery.execute({ userId }),
+        ]);
+
+        return { redisRefreshToken, user };
+      });
+      if (!sessionResult.success) {
+        const { code, message } = handleError(sessionResult.error);
+        return status(code, { message });
+      }
+
+      const { redisRefreshToken, user } = sessionResult.data;
+      if (!redisRefreshToken) return status(401, { message: "Unauthorized" });
+      if (!user) return status(401, { message: "Unauthorized" });
+
+      const refreshTokenBuffer = Buffer.from(refreshToken);
+      const redisRefreshTokenBuffer = Buffer.from(redisRefreshToken);
+      if (
+        refreshTokenBuffer.length !== redisRefreshTokenBuffer.length ||
+        !timingSafeEqual(refreshTokenBuffer, redisRefreshTokenBuffer)
+      ) {
+        return status(401, { message: "Unauthorized" });
+      }
+
+      const [newAccessToken, newRefreshToken] = await Promise.all([
+        JwtAccessToken.sign({
+          user: user,
+        }),
+
+        JwtRefreshToken.sign({
+          user: { id: user.id },
+        }),
+      ]);
+
+      AccessToken.set({
+        value: newAccessToken,
+        secure: true,
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge: ACCESS_TOKEN_EXPIRY,
+        secrets: Bun.env.COOKIE_SECRET,
+      });
+
+      RefreshToken.set({
+        value: newRefreshToken,
+        secure: true,
+        httpOnly: true,
+        sameSite: "lax",
+        maxAge: REFRESH_TOKEN_EXPIRY,
+        secrets: Bun.env.COOKIE_SECRET,
+      });
+
+      await redis.set(cacheKey, newRefreshToken, "EX", REFRESH_TOKEN_EXPIRY);
+
+      set.headers["content-type"] = "application/json";
+
+      return status(200, { message: "Token refreshed successfully" });
     },
   )
 
@@ -215,28 +222,20 @@ const UserRoutes = new Elysia({
   .post(
     "/logout",
     async ({
-      status,
       set,
-      user: { id },
+      status,
+      user: { id: userId },
       cookie: { AccessToken, RefreshToken },
     }) => {
-      const userId = id;
+      const cacheKey = `${REFRESH_TOKEN_PREFIX}${userId}`;
+      await redis.del(cacheKey);
 
-      try {
-        const cacheKey = `${REFRESH_TOKEN_PREFIX}${userId}`;
-        await redis.del(cacheKey);
+      AccessToken.remove();
+      RefreshToken.remove();
 
-        AccessToken.remove();
-        RefreshToken.remove();
+      set.headers["content-type"] = "application/json";
 
-        set.headers["content-type"] = "application/json";
-
-        return status(200, { message: "Logout successful" });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
-        return status(code, { message });
-      }
+      return status(200, { message: "Logout successful" });
     },
     { auth: true },
   )
@@ -245,13 +244,7 @@ const UserRoutes = new Elysia({
   .get(
     "/profile",
     async ({ status, user }) => {
-      try {
-        return status(200, { user });
-      } catch (error) {
-        const { code, message } = handleError(error);
-
-        return status(code, { message });
-      }
+      return status(200, { user });
     },
     { auth: true },
   );

@@ -6,7 +6,7 @@ import { user } from "../../Model/User/user-model";
 
 import type { TUserLogin, TUserRegister } from "./user-types";
 
-export const getUserByNameAndEmail = db
+export const userByNameAndEmailQuery = db
   .select({ name: user.name, email: user.email })
   .from(user)
   .where(
@@ -16,20 +16,20 @@ export const getUserByNameAndEmail = db
     ),
   )
   .limit(1)
-  .prepare("getUserByNameAndEmail");
+  .prepare("userByNameAndEmailQuery");
 
-export const getUserById = db
+export const userByIdQuery = db
   .select({ id: user.id, name: user.name, email: user.email })
   .from(user)
   .where(eq(user.id, sql.placeholder("userId")))
   .limit(1)
-  .prepare("getUserById");
+  .prepare("userByIdQuery");
 
-export function userRegisterQuery(data: TUserRegister) {
+export function registerUserQuery(data: TUserRegister) {
   return db.insert(user).values(data);
 }
 
-export function userLoginQuery({ email }: Pick<TUserLogin, "email">) {
+export function loginUserQuery({ email }: Pick<TUserLogin, "email">) {
   return db
     .select({
       id: user.id,

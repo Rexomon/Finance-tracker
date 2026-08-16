@@ -17,7 +17,7 @@ import type {
   TTransactionByCategory,
 } from "./transaction-types";
 
-export function getExistingTransaction({
+export function getExistingTransactionQuery({
   userId,
   category: categoryId,
   month,
@@ -41,7 +41,7 @@ export function getExistingTransaction({
     .limit(1);
 }
 
-export function getTransactionById({
+export function getTransactionByIdQuery({
   transactionId,
   userId,
 }: TTransactionById) {
@@ -60,7 +60,7 @@ export function getTransactionById({
     .limit(1);
 }
 
-export function getTransactionByCategory({
+export function getTransactionByCategoryQuery({
   userId,
   category: categoryId,
 }: TTransactionByCategory) {
@@ -74,18 +74,18 @@ export function getTransactionByCategory({
     .limit(1);
 }
 
-export function transactionListQuery({
+export function listTransactionQuery({
   userId,
   page,
   pageSize,
 }: TTransactionList) {
-  const totalCount = db
+  const transactionCountQuery = db
     .select({ totalCount: count(transaction.id) })
     .from(transaction)
     .innerJoin(category, eq(transaction.category, category.id))
     .where(eq(category.userId, userId));
 
-  const dataResult = db
+  const transactionListQuery = db
     .select({
       category: {
         id: category.id,
@@ -101,19 +101,19 @@ export function transactionListQuery({
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  return { totalCount, dataResult };
+  return { transactionCountQuery, transactionListQuery };
 }
 
-export function transactionSummaryQuery({ userId }: TTransactionUserId) {
-  const d = new Date();
-  const month = d.getMonth() + 1;
-  const year = d.getFullYear();
+export function getTransactionSummaryQuery({ userId }: TTransactionUserId) {
+  const currentDate = new Date();
+  const month = currentDate.getMonth() + 1;
+  const year = currentDate.getFullYear();
 
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 1);
   const sixMonthsAgoDate = new Date(year, month - 6, 1);
 
-  const currentMonthSummary = db
+  const currentMonthSummaryQuery = db
     .select({
       totalIncome:
         sql<number>`COALESCE(SUM(CASE WHEN ${transaction.type} = 'income' THEN ${transaction.amount} ELSE 0 END), 0)`.mapWith(
@@ -134,7 +134,7 @@ export function transactionSummaryQuery({ userId }: TTransactionUserId) {
       ),
     );
 
-  const currentMonthExpenseByCategory = db
+  const currentMonthExpenseByCategoryQuery = db
     .select({
       categoryId: category.id,
       categoryName: category.categoryName,
@@ -156,7 +156,7 @@ export function transactionSummaryQuery({ userId }: TTransactionUserId) {
     .groupBy(category.id);
 
   // Monthly trends for the past 6 months
-  const monthlyTrends = db
+  const monthlyTrendsQuery = db
     .select({
       month: sql<number>`EXTRACT(MONTH FROM ${transaction.date})`.mapWith(
         Number,
@@ -184,15 +184,22 @@ export function transactionSummaryQuery({ userId }: TTransactionUserId) {
       sql`${sql<number>`EXTRACT(YEAR FROM ${transaction.date})`}, ${sql<number>`EXTRACT(MONTH FROM ${transaction.date})`}`,
     );
 
-  const recentTransactions = db
-    .select()
+  const recentTransactionsQuery = db
+    .select({
+      transaction: transaction,
+      category: {
+        id: category.id,
+        categoryName: category.categoryName,
+        type: category.type,
+      },
+    })
     .from(transaction)
     .innerJoin(category, eq(transaction.category, category.id))
     .where(eq(category.userId, userId))
     .orderBy(desc(transaction.date))
     .limit(10);
 
-  const currentMonthBudgets = db
+  const currentMonthBudgetsQuery = db
     .select()
     .from(budget)
     .innerJoin(category, eq(budget.category, category.id))
@@ -205,15 +212,15 @@ export function transactionSummaryQuery({ userId }: TTransactionUserId) {
     );
 
   return {
-    currentMonthSummary,
-    currentMonthExpenseByCategory,
-    monthlyTrends,
-    recentTransactions,
-    currentMonthBudgets,
+    currentMonthSummaryQuery,
+    currentMonthExpenseByCategoryQuery,
+    monthlyTrendsQuery,
+    recentTransactionsQuery,
+    currentMonthBudgetsQuery,
   };
 }
 
-export function transactionUpdateQuery({
+export function updateTransactionQuery({
   transactionId,
   userId,
   category: categoryId,
@@ -245,7 +252,7 @@ export function transactionUpdateQuery({
     );
 }
 
-export function transactionDeleteQuery({
+export function deleteTransactionQuery({
   transactionId,
   userId,
 }: TTransactionDelete) {
@@ -265,6 +272,6 @@ export function transactionDeleteQuery({
     );
 }
 
-export function transactionCreateQuery(data: TTransaction) {
+export function createTransactionQuery(data: TTransaction) {
   return db.insert(transaction).values(data);
 }

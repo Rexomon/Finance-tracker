@@ -1,13 +1,19 @@
-import { handleError } from "../../Utils/ErrorHandling";
-import { getBudgetByCategory, getExistingBudget } from "../Budget/budget-db";
-import { getTransactionByCategory } from "../Transaction/transaction-db";
+import {
+  error,
+  success,
+  tryCatch,
+  handleError,
+} from "../../Utils/ErrorHandling";
+
+import { getBudgetByCategoryQuery, getExistingBudgetQuery } from "../Budget/budget-db";
+import { getTransactionByCategoryQuery } from "../Transaction/transaction-db";
 
 import {
-  categoryListQuery,
-  getExistingCategory,
-  categoryCreateQuery,
-  categoryUpdateQuery,
-  categoryDeleteQuery,
+  listCategoryQuery,
+  createCategoryQuery,
+  updateCategoryQuery,
+  deleteCategoryQuery,
+  getExistingCategoryQuery,
 } from "./category-db";
 
 import type {
@@ -18,218 +24,226 @@ import type {
   TCategoryDeleteQuery,
 } from "./category-types";
 
-export const categoryCreateService = async ({
+export const createCategoryService = async ({
   userId,
   categoryName,
   type,
 }: TCategoryCreate) => {
-  try {
-    const categoryData = {
-      userId,
-      categoryName,
-      type,
-    } satisfies TCategoryCreate;
+  const categoryCreationInput = {
+    userId,
+    categoryName,
+    type,
+  };
 
-    const [existingCategory] = await getExistingCategory(categoryData);
-    if (existingCategory) {
-      return { code: 409, message: "Category already exists" };
-    }
+  const existingCategoryResult = await tryCatch(async () => {
+    const [existingCategory] = await getExistingCategoryQuery(
+      categoryCreationInput,
+    );
 
-    await categoryCreateQuery(categoryData);
-
-    return { code: 201, message: "Category created successfully" };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    return existingCategory;
+  });
+  if (!existingCategoryResult.success) {
+    const { code, message } = handleError(existingCategoryResult.error);
+    return error({ code, message });
   }
+
+  const existingCategory = existingCategoryResult.data;
+  if (existingCategory) {
+    return error({ code: 409, message: "Category already exists" });
+  }
+
+  const categoryCreationResult = await tryCatch(() =>
+    createCategoryQuery(categoryCreationInput),
+  );
+  if (!categoryCreationResult.success) {
+    const { code, message } = handleError(categoryCreationResult.error);
+    return error({ code, message });
+  }
+
+  return success({ code: 201, message: "Category created successfully" });
 };
 
-export const categoryListService = async ({
+export const listCategoryService = async ({
   userId,
   type,
-}: TCategoryListQuery): Promise<
-  | {
-      code: 429 | 500;
-      message: string;
-    }
-  | {
-      code: 200;
-      message: string;
-      categories: {
-        _id: number;
-        categoryName: string;
-        type: "income" | "expense";
-        createdAt: Date;
-        updatedAt: Date;
-      }[];
-    }
-> => {
-  try {
-    const query: TCategoryListQuery = { userId };
-    if (type !== undefined) query.type = type;
+}: TCategoryListQuery) => {
+  const categoryListQuery: TCategoryListQuery = { userId };
+  if (type !== undefined) categoryListQuery.type = type;
 
-    const categories = await categoryListQuery(query);
-    if (categories.length === 0) {
-      return {
-        code: 200,
-        message: "No categories found, or you have not created any",
-        categories: [],
-      };
-    }
-
-    return {
-      code: 200,
-      message: "Categories retrieved successfully",
-      categories,
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+  const categoryListResult = await tryCatch(() =>
+    listCategoryQuery(categoryListQuery),
+  );
+  if (!categoryListResult.success) {
+    const { code, message } = handleError(categoryListResult.error);
+    return error({ code, message });
   }
+
+  if (categoryListResult.data.length === 0) {
+    return success({
+      code: 200,
+      message: "No categories found, or you have not created any",
+      categories: [],
+    });
+  }
+
+  return success({
+    code: 200,
+    message: "Categories retrieved successfully",
+    categories: categoryListResult.data,
+  });
 };
 
-export const categoryDeleteService = async ({
+export const deleteCategoryService = async ({
   categoryId,
   userId,
-}: TCategoryDeleteQuery): Promise<
-  | {
-      code: 400 | 404 | 429 | 500;
-      message: string;
-    }
-  | {
-      code: 200;
-      message: string;
-      type: "income" | "expense";
-    }
-> => {
-  try {
+}: TCategoryDeleteQuery) => {
+  const categoryUsageResult = await tryCatch(async () => {
     const [[transactionUsingCategory], [budgetUsingCategory]] =
       await Promise.all([
-        getTransactionByCategory({ category: categoryId, userId }),
-        getExistingBudget({ category: categoryId, userId, filter: "equal" }),
+        getTransactionByCategoryQuery({ category: categoryId, userId }),
+        getExistingBudgetQuery({ category: categoryId, userId, matchMode: "equal" }),
       ]);
-    if (transactionUsingCategory || budgetUsingCategory) {
-      return {
-        code: 400,
-        message:
-          "Category cannot be deleted as it is being used in transactions or budgets",
-      };
-    }
 
-    const [deletedCategory] = await categoryDeleteQuery({ categoryId, userId });
-    if (!deletedCategory) {
-      return {
-        code: 404,
-        message: "Category not found",
-      };
-    }
-
-    return {
-      code: 200,
-      message: "Category deleted successfully",
-      type: deletedCategory.type,
-    };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+    return { transactionUsingCategory, budgetUsingCategory };
+  });
+  if (!categoryUsageResult.success) {
+    const { code, message } = handleError(categoryUsageResult.error);
+    return error({ code, message });
   }
+
+  const { transactionUsingCategory, budgetUsingCategory } =
+    categoryUsageResult.data;
+  if (transactionUsingCategory || budgetUsingCategory) {
+    return error({
+      code: 400,
+      message:
+        "Category cannot be deleted as it is being used in transactions or budgets",
+    });
+  }
+
+  const categoryDeletionResult = await tryCatch(async () => {
+    const [deletedCategory] = await deleteCategoryQuery({ categoryId, userId });
+
+    return deletedCategory;
+  });
+  if (!categoryDeletionResult.success) {
+    const { code, message } = handleError(categoryDeletionResult.error);
+    return error({ code, message });
+  }
+  if (!categoryDeletionResult.data) {
+    return error({
+      code: 404,
+      message: "Category not found",
+    });
+  }
+
+  return success({
+    code: 200,
+    message: "Category deleted successfully",
+    type: categoryDeletionResult.data.type,
+  });
 };
 
-export const categoryUpdateService = async ({
+export const updateCategoryService = async ({
   categoryId,
   userId,
   categoryName,
   type,
-}: TCategoryUpdateQuery): Promise<
-  | {
-      code: 400 | 404 | 409 | 429 | 500;
-      message: string;
-    }
-  | {
-      code: 200;
-      message: string;
-      hasTypeChanged: boolean;
-      isCategoryBeingUsed: boolean;
-      currentType: "income" | "expense";
-    }
-> => {
-  try {
+}: TCategoryUpdateQuery) => {
+  const categoryValidationResult = await tryCatch(async () => {
     const [
       [existingCategory],
       [currentCategory],
       [transactionUsingCategory],
       [budgetUsingCategory],
     ] = await Promise.all([
-      getExistingCategory({
+      getExistingCategoryQuery({
         categoryId,
         userId,
         ...(categoryName !== undefined ? { categoryName } : {}),
-        filter: "notEqual",
+        matchMode: "notEqual",
       }),
-      getExistingCategory({
+      getExistingCategoryQuery({
         categoryId,
         userId,
-        filter: "equal",
+        matchMode: "equal",
       }),
-      getTransactionByCategory({ category: categoryId, userId }),
-      getBudgetByCategory({ category: categoryId, userId }),
+      getTransactionByCategoryQuery({ category: categoryId, userId }),
+      getBudgetByCategoryQuery({ category: categoryId, userId }),
     ]);
 
-    if (categoryName === undefined && type === undefined) {
-      return {
-        code: 400,
-        message: "Either categoryName or type must be provided",
-      };
-    }
-
-    if (existingCategory) {
-      return {
-        code: 409,
-        message: "Category with the same name and type already exists",
-      };
-    }
-
-    if (!currentCategory) {
-      return {
-        code: 404,
-        message: "Category not found",
-      };
-    }
-
-    const hasTypeChanged = type !== undefined && currentCategory.type !== type;
-
-    if ((transactionUsingCategory || budgetUsingCategory) && hasTypeChanged) {
-      return {
-        code: 400,
-        message:
-          "Category type cannot be changed as it is being used in transactions or budgets",
-      };
-    }
-
-    const updatedCategory: TCategoryOptional = {};
-    if (categoryName !== undefined) updatedCategory.categoryName = categoryName;
-    if (type !== undefined) updatedCategory.type = type;
-
-    await categoryUpdateQuery({ categoryId, userId, ...updatedCategory });
-
-    let isCategoryBeingUsed = false;
-    if (transactionUsingCategory || budgetUsingCategory) {
-      isCategoryBeingUsed = true;
-    }
-
     return {
-      code: 200,
-      message: "Category updated successfully",
-      hasTypeChanged,
-      isCategoryBeingUsed,
-      currentType: currentCategory.type,
+      existingCategory,
+      currentCategory,
+      transactionUsingCategory,
+      budgetUsingCategory,
     };
-  } catch (error) {
-    const { code, message } = handleError(error);
-
-    return { code, message };
+  });
+  if (!categoryValidationResult.success) {
+    const { code, message } = handleError(categoryValidationResult.error);
+    return error({ code, message });
   }
+
+  const {
+    existingCategory,
+    currentCategory,
+    transactionUsingCategory,
+    budgetUsingCategory,
+  } = categoryValidationResult.data;
+  const hasTypeChanged = type !== undefined && currentCategory.type !== type;
+
+  if (categoryName === undefined && type === undefined) {
+    return error({
+      code: 400,
+      message: "Either categoryName or type must be provided",
+    });
+  }
+
+  if (existingCategory) {
+    return error({
+      code: 409,
+      message: "Category with the same name and type already exists",
+    });
+  }
+
+  if (!currentCategory) {
+    return error({
+      code: 404,
+      message: "Category not found",
+    });
+  }
+
+  if ((transactionUsingCategory || budgetUsingCategory) && hasTypeChanged) {
+    return error({
+      code: 400,
+      message:
+        "Category type cannot be changed as it is being used in transactions or budgets",
+    });
+  }
+
+  const categoryUpdateData: TCategoryOptional = {};
+  if (categoryName !== undefined)
+    categoryUpdateData.categoryName = categoryName;
+  if (type !== undefined) categoryUpdateData.type = type;
+
+  const categoryUpdateResult = await tryCatch(() =>
+    updateCategoryQuery({ categoryId, userId, ...categoryUpdateData }),
+  );
+  if (!categoryUpdateResult.success) {
+    const { code, message } = handleError(categoryUpdateResult.error);
+    return error({ code, message });
+  }
+
+  let isCategoryBeingUsed = false;
+  if (transactionUsingCategory || budgetUsingCategory) {
+    isCategoryBeingUsed = true;
+  }
+
+  return success({
+    code: 200,
+    message: "Category updated successfully",
+    hasTypeChanged,
+    isCategoryBeingUsed,
+    currentType: currentCategory.type,
+  });
 };

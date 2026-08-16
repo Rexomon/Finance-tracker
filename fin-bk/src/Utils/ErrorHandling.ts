@@ -1,5 +1,27 @@
 import { RedisLockError } from "./RedisLocking";
 
+export type Result<S, E> =
+  | { success: true; data: S }
+  | { success: false; error: E };
+
+export function success<const S>(data: S): Result<S, never> {
+  return { success: true, data };
+}
+
+export function error<const E>(error: E): Result<never, E> {
+  return { success: false, error };
+}
+
+export async function tryCatch<S>(
+  operation: () => Promise<S>,
+): Promise<{ success: true; data: S } | { success: false; error: unknown }> {
+  try {
+    return success(await operation());
+  } catch (err: unknown) {
+    return error(err);
+  }
+}
+
 export function handleError(error: unknown): {
   code: 500 | 429;
   message: string;
