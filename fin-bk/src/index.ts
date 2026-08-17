@@ -4,11 +4,11 @@ import { rateLimit } from "elysia-rate-limit";
 import cors from "@elysiajs/cors";
 import swagger from "@elysiajs/swagger";
 
-import Headers from "./Middleware/Headers";
+import Headers from "./middleware/headers";
 
 import { apiRoutesV1 } from "./routes";
-import { getRealIp } from "./Utils/RealIp";
-import { safelyCloseRedis } from "./Config/Redis";
+import { getRealIp } from "./utils/real-ip";
+import { safelyCloseRedis } from "./config/redis";
 
 const port = Number(Bun.env.PORT);
 const nodeEnv = Bun.env.NODE_ENV;
