@@ -103,12 +103,12 @@ const UserRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
-      const registrationResult =
-        await registerUserService(userRegistrationInput);
+      const registrationResult = await registerUserService(
+        userRegistrationInput,
+      );
       if (!registrationResult.success) {
         return status(registrationResult.error.code, {
           message: registrationResult.error.message,
@@ -150,8 +150,7 @@ const UserRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(cacheKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const sessionResult = await tryCatch(async () => {

@@ -5,7 +5,7 @@ import { redis } from "../../config/redis";
 import Auth from "../../middleware/auth";
 
 import { RedisLock } from "../../utils/redis-lock";
-import { tryCatch, handleError } from "../../utils/error-handler";
+import { tryCatch } from "../../utils/error-handler";
 import { invalidateUserBudgetCache } from "../../utils/redis-cache";
 
 import {
@@ -45,9 +45,12 @@ const BudgetRoutes = new Elysia({
       body: { category, limit, month, year },
     }) => {
       const budgetCreationInput = { userId, category, limit, month, year };
-
       const lockKey = `CreateBudget:${userId}:${category}:${month}:${year}`;
-      await lock.acquire(lockKey);
+      
+      const lockResult = await tryCatch(() => lock.acquire(lockKey));
+      if (!lockResult.success) {
+        throw lockResult.error;
+      }
 
       const budgetCreationResult =
         await createBudgetService(budgetCreationInput);
@@ -134,8 +137,7 @@ const BudgetRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const budgetUpdateResult = await updateBudgetService(budgetUpdateInput);
@@ -168,8 +170,7 @@ const BudgetRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const budgetDeletionResult =

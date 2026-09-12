@@ -5,7 +5,7 @@ import { redis } from "../../config/redis";
 import Auth from "../../middleware/auth";
 
 import { RedisLock } from "../../utils/redis-lock";
-import { tryCatch, handleError } from "../../utils/error-handler";
+import { tryCatch } from "../../utils/error-handler";
 import {
   invalidateUserBudgetCache,
   invalidateUserTransactionCache,
@@ -59,8 +59,7 @@ const TransactionRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const transactionCreationResult = await createTransactionService(
@@ -189,8 +188,7 @@ const TransactionRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const transactionUpdateResult = await updateTransactionService(
@@ -231,8 +229,7 @@ const TransactionRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const transactionDeletionResult = await deleteTransactionService(

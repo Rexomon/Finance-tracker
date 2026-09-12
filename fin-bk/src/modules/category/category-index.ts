@@ -5,7 +5,7 @@ import { redis } from "../../config/redis";
 import Auth from "../../middleware/auth";
 
 import { RedisLock } from "../../utils/redis-lock";
-import { tryCatch, handleError } from "../../utils/error-handler";
+import { tryCatch } from "../../utils/error-handler";
 
 import {
   listCategoryService,
@@ -57,8 +57,7 @@ const CategoryRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const categoryCreationResult = await createCategoryService(
@@ -130,8 +129,7 @@ const CategoryRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const categoryDeletionResult = await deleteCategoryService(
@@ -172,8 +170,7 @@ const CategoryRoutes = new Elysia({
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
-        const { code, message } = handleError(lockResult.error);
-        return status(code, { message });
+        throw lockResult.error;
       }
 
       const categoryUpdateResult =
@@ -203,7 +200,7 @@ const CategoryRoutes = new Elysia({
       }
 
       await Promise.all([
-        redis.del(cacheKeysToDelete),
+        redis.del(...cacheKeysToDelete),
         ...cacheInvalidationPromises,
       ]);
 
