@@ -12,7 +12,7 @@ export const redis = new Redis(RedisUrl, {
 
     if (times > MAX_RETRIES) {
       console.error("Max retries reached. Closing Redis connection.");
-      return null;
+      process.exit(1);
     }
 
     const delay = Math.min(times * 1000, 5000);

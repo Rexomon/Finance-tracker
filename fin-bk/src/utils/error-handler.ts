@@ -12,9 +12,7 @@ export function error<const E>(error: E): Result<never, E> {
   return { success: false, error };
 }
 
-export async function tryCatch<S>(
-  operation: () => Promise<S>,
-): Promise<{ success: true; data: S } | { success: false; error: unknown }> {
+export async function tryCatch<S>(operation: () => Promise<S>) {
   try {
     return success(await operation());
   } catch (err: unknown) {
