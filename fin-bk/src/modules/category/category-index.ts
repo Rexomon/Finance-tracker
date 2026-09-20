@@ -125,7 +125,7 @@ const CategoryRoutes = new Elysia({
     "/:categoryId",
     async ({ status, lock, user: { id: userId }, params: { categoryId } }) => {
       const categoryDeletionInput = { categoryId, userId };
-      const lockKey = `DeleteCategory:${userId}:${categoryId}`;
+      const lockKey = `Category:${userId}:${categoryId}`;
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
@@ -166,7 +166,7 @@ const CategoryRoutes = new Elysia({
       body: { categoryName, type },
     }) => {
       const categoryUpdateInput = { categoryId, userId, categoryName, type };
-      const lockKey = `UpdateCategory:${userId}:${categoryId}`;
+      const lockKey = `Category:${userId}:${categoryId}`;
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
@@ -196,6 +196,7 @@ const CategoryRoutes = new Elysia({
         cacheInvalidationPromises.push(
           invalidateUserBudgetCache(userId),
           invalidateUserTransactionCache(userId),
+          redis.del(`transaction_summary:${userId}`),
         );
       }
 

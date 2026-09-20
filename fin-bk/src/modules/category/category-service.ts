@@ -5,7 +5,10 @@ import {
   handleError,
 } from "../../utils/error-handler";
 
-import { getBudgetByCategoryQuery, getExistingBudgetQuery } from "../budget/budget-db";
+import {
+  getExistingBudgetQuery,
+  getBudgetByCategoryQuery,
+} from "../budget/budget-db";
 import { getTransactionByCategoryQuery } from "../transaction/transaction-db";
 import {
   listCategoryQuery,
@@ -100,7 +103,11 @@ export const deleteCategoryService = async ({
     const [[transactionUsingCategory], [budgetUsingCategory]] =
       await Promise.all([
         getTransactionByCategoryQuery({ category: categoryId, userId }),
-        getExistingBudgetQuery({ category: categoryId, userId, matchMode: "equal" }),
+        getExistingBudgetQuery({
+          category: categoryId,
+          userId,
+          matchMode: "equal",
+        }),
       ]);
 
     return { transactionUsingCategory, budgetUsingCategory };
@@ -189,14 +196,6 @@ export const updateCategoryService = async ({
     transactionUsingCategory,
     budgetUsingCategory,
   } = categoryValidationResult.data;
-  const hasTypeChanged = type !== undefined && currentCategory.type !== type;
-
-  if (categoryName === undefined && type === undefined) {
-    return error({
-      code: 400,
-      message: "Either categoryName or type must be provided",
-    });
-  }
 
   if (existingCategory) {
     return error({
@@ -209,6 +208,16 @@ export const updateCategoryService = async ({
     return error({
       code: 404,
       message: "Category not found",
+    });
+  }
+
+  const hasEmptyPayload = categoryName === undefined && type === undefined;
+  const hasTypeChanged = type !== undefined && currentCategory.type !== type;
+
+  if (hasEmptyPayload) {
+    return error({
+      code: 400,
+      message: "Either categoryName or type must be provided",
     });
   }
 
