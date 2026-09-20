@@ -4,7 +4,6 @@ import type { TObjectId } from "../types/types";
 
 const invalidateCacheByPattern = async (pattern: string) => {
   let cursor = "0";
-  let lastError: Error | null = null;
 
   do {
     try {
@@ -23,13 +22,9 @@ const invalidateCacheByPattern = async (pattern: string) => {
       cursor = nextCursor;
     } catch (error) {
       console.error("Error invalidating cache by pattern:", error);
-      lastError = error as Error;
+      throw error;
     }
   } while (cursor !== "0");
-
-  if (lastError) {
-    throw lastError;
-  }
 };
 
 export const invalidateUserTransactionCache = (userId: TObjectId) => {

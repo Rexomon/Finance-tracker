@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { timingSafeEqual } from "node:crypto";
 
 import { redis } from "../config/redis";
 
@@ -44,9 +45,18 @@ const Auth = new Elysia({ name: "Auth" }).use(JwtAccessToken()).macro({
 
       // Single session sign in check
       const { redisRefreshToken, existingUser } = sessionResult.data;
-      if (!redisRefreshToken || refreshToken !== redisRefreshToken)
-        return status(401, { message: "Unauthorized" });
+      if (!redisRefreshToken) return status(401, { message: "Unauthorized" });
       if (!existingUser) return status(401, { message: "Unauthorized" });
+
+      const refreshTokenBuffer = Buffer.from(refreshToken);
+      const redisRefreshTokenBuffer = Buffer.from(redisRefreshToken);
+
+      const tokensMatch =
+        refreshTokenBuffer.length === redisRefreshTokenBuffer.length &&
+        timingSafeEqual(refreshTokenBuffer, redisRefreshTokenBuffer);
+      if (!tokensMatch) {
+        return status(401, { message: "Unauthorized" });
+      }
 
       return {
         user: tokenPayload.user,

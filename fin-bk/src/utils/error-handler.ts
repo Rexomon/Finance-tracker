@@ -22,12 +22,9 @@ export async function tryCatch<S>(operation: () => Promise<S>) {
   }
 }
 
-export function handleError(error: unknown): {
-  code: 500;
-  message: string;
-} {
+export function handleError(error: unknown) {
   console.error(error);
-  return { code: 500, message: "An internal server error occurred" };
+  return { code: 500, message: "An internal server error occurred" } as const;
 }
 
 export const ErrorHandler = new Elysia()
