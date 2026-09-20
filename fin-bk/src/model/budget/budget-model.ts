@@ -1,4 +1,4 @@
-import { index, integer, pgTable } from "drizzle-orm/pg-core";
+import { integer, pgTable, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { category } from "../category/category-model";
 
@@ -25,10 +25,10 @@ export const budget = pgTable(
     ...timestamps,
   },
   (table) => [
-    index("budget_categoryId_month_year_idx").on(
+    uniqueIndex("budget_categoryId_month_year_uniqueIdx").on(
       table.category,
-      table.month.desc(),
-      table.year.desc(),
+      table.month,
+      table.year,
     ),
   ],
 );

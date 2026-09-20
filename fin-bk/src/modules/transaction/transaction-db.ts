@@ -272,6 +272,34 @@ export function deleteTransactionQuery({
     );
 }
 
+export function getSumTransactionExpenseQuery({
+  userId,
+  category: categoryId,
+  month,
+  year,
+}: TTransactionExist) {
+  const startOfDate = new Date(year, month - 1, 1);
+  const endOfDate = new Date(year, month, 1);
+
+  return db
+    .select({
+      totalAmount: sql<number>`COALESCE(SUM(${transaction.amount}), 0)`.mapWith(
+        Number,
+      ),
+    })
+    .from(transaction)
+    .innerJoin(category, eq(transaction.category, category.id))
+    .where(
+      and(
+        eq(transaction.category, categoryId),
+        eq(category.userId, userId),
+        eq(transaction.type, "expense"),
+        gte(transaction.date, startOfDate),
+        lt(transaction.date, endOfDate),
+      ),
+    );
+}
+
 export function createTransactionQuery(data: TTransaction) {
   return db.insert(transaction).values(data);
 }

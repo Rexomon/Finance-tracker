@@ -6,7 +6,10 @@ import {
 } from "../../utils/error-handler";
 
 import { getExistingCategoryQuery } from "../category/category-db";
-import { getExistingTransactionQuery } from "../transaction/transaction-db";
+import {
+  getExistingTransactionQuery,
+  getSumTransactionExpenseQuery,
+} from "../transaction/transaction-db";
 import {
   listBudgetQuery,
   createBudgetQuery,
@@ -157,6 +160,7 @@ export const updateBudgetService = async ({
     const [currentBudget] = await getExistingBudgetQuery({
       budgetId,
       userId,
+      matchMode: "equal",
     });
 
     return currentBudget;
@@ -248,9 +252,32 @@ export const updateBudgetService = async ({
       message: "Either category, limit, month, or year must be provided",
     });
 
+  const budgetTotalExpense = await tryCatch(async () => {
+    const [spent] = await getSumTransactionExpenseQuery({
+      category: currentBudget.categoryId,
+      userId,
+      month: currentBudget.month,
+      year: currentBudget.year,
+    });
+    return spent;
+  });
+  if (!budgetTotalExpense.success) {
+    const { code, message } = handleError(budgetTotalExpense.error);
+    return error({ code, message });
+  }
+
+  const { totalAmount: budgetSpent } = budgetTotalExpense.data;
+
+  if (limit !== undefined && limit < budgetSpent) {
+    return error({
+      code: 400,
+      message: "New budget limit cannot be less than the amount spent",
+    });
+  }
+
   const budgetUpdateData: TBudgetOptional = {};
   if (categoryId !== undefined) budgetUpdateData.category = categoryId;
-  if (limit !== undefined) budgetUpdateData.limit = limit;
+  if (limit !== undefined) budgetUpdateData.limit = limit - budgetSpent;
   if (month !== undefined) budgetUpdateData.month = month;
   if (year !== undefined) budgetUpdateData.year = year;
 
@@ -348,8 +375,7 @@ export const adjustBudgetForTransaction = async (
   }
 
   const existingBudget = existingBudgetResult.data;
-  if (!existingBudget)
-    return error({ code: 404, message: "Budget not found" });
+  if (!existingBudget) return error({ code: 404, message: "Budget not found" });
 
   const budgetAdjustmentResult = await tryCatch(async () => {
     const [budgetAdjustment] = await adjustBudgetQuery(

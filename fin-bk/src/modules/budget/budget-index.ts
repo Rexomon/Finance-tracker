@@ -46,7 +46,7 @@ const BudgetRoutes = new Elysia({
     }) => {
       const budgetCreationInput = { userId, category, limit, month, year };
       const lockKey = `CreateBudget:${userId}:${category}:${month}:${year}`;
-      
+
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
         throw lockResult.error;
@@ -133,7 +133,7 @@ const BudgetRoutes = new Elysia({
         month,
         year,
       };
-      const lockKey = `UpdateBudget:${budgetId}:${userId}`;
+      const lockKey = `Budget:${budgetId}:${userId}`;
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
@@ -166,7 +166,7 @@ const BudgetRoutes = new Elysia({
     "/:budgetId",
     async ({ status, lock, user: { id: userId }, params: { budgetId } }) => {
       const budgetDeletionInput = { budgetId, userId };
-      const lockKey = `DeleteBudget:${budgetId}:${userId}`;
+      const lockKey = `Budget:${budgetId}:${userId}`;
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {

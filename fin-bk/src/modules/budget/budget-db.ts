@@ -81,10 +81,10 @@ export function updateBudgetQuery({
     ),
   ];
 
-  if (categoryId) budgetUpdates.category = categoryId;
-  if (limit) budgetUpdates.limit = limit;
-  if (month) budgetUpdates.month = month;
-  if (year) budgetUpdates.year = year;
+  if (categoryId !== undefined) budgetUpdates.category = categoryId;
+  if (limit !== undefined) budgetUpdates.limit = limit;
+  if (month !== undefined) budgetUpdates.month = month;
+  if (year !== undefined) budgetUpdates.year = year;
 
   return db
     .update(budget)
