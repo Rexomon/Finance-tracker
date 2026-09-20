@@ -184,7 +184,7 @@ const TransactionRoutes = new Elysia({
         description,
         date,
       };
-      const lockKey = `UpdateTransaction:${userId}:${transactionId}`;
+      const lockKey = `Transaction:${userId}:${transactionId}`;
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
@@ -225,7 +225,7 @@ const TransactionRoutes = new Elysia({
       params: { transactionId },
     }) => {
       const transactionDeletionInput = { transactionId, userId };
-      const lockKey = `DeleteTransaction:${userId}:${transactionId}`;
+      const lockKey = `Transaction:${userId}:${transactionId}`;
 
       const lockResult = await tryCatch(() => lock.acquire(lockKey));
       if (!lockResult.success) {
@@ -243,7 +243,7 @@ const TransactionRoutes = new Elysia({
 
       const cacheInvalidationPromises = [
         invalidateUserTransactionCache(userId),
-        redis.del(`transaction_summary:${userId}`),
+        redis.del(`${TRANSACTION_SUMMARY_PREFIX}${userId}`),
       ];
       if (transactionDeletionResult.data.deletedType === "expense") {
         cacheInvalidationPromises.push(invalidateUserBudgetCache(userId));

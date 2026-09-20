@@ -384,10 +384,15 @@ export const deleteTransactionService = async ({
     return existingTransaction;
   });
   if (!existingTransactionResult.success) {
-    return error({ code: 404, message: "Transaction not found" });
+    const { code, message } = handleError(existingTransactionResult.error);
+    return error({ code, message });
   }
 
   const existingTransaction = existingTransactionResult.data;
+  if (!existingTransaction) {
+    return error({ code: 404, message: "Transaction not found" });
+  }
+
   if (existingTransaction.type === "expense") {
     const budgetRefundResult = await adjustBudgetForTransaction(
       userId,

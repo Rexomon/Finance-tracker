@@ -14,8 +14,8 @@ export const TransactionIdSchema = t.Object({
 export const TransactionSchema = t.Object(
   {
     category: ObjectIdSchema,
-    amount: t.Number({
-      minimum: 0.01,
+    amount: t.Integer({
+      minimum: 1,
       error: "Invalid amount",
     }),
     type: t.Union([t.Literal("income"), t.Literal("expense")], {
