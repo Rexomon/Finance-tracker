@@ -307,8 +307,8 @@
                 </div>
                 <div class="ml-5 w-0 flex-1">
                   <dl>
-                    <dt class="text-sm font-medium text-gray-500 truncate">
-                      Total Income
+                    <dt class="text-sm font-medium text-gray-900 truncate">
+                      Income This Month
                     </dt>
                     <dd class="text-lg font-medium text-gray-900">
                       {{ formatCurrency(totalIncome) }}
@@ -343,8 +343,8 @@
                 </div>
                 <div class="ml-5 w-0 flex-1">
                   <dl>
-                    <dt class="text-sm font-medium text-gray-500 truncate">
-                      Total Expenses
+                    <dt class="text-sm font-medium text-gray-900 truncate">
+                      Expenses This Month
                     </dt>
                     <dd class="text-lg font-medium text-gray-900">
                       {{ formatCurrency(totalExpense) }}
@@ -379,7 +379,7 @@
                 </div>
                 <div class="ml-5 w-0 flex-1">
                   <dl>
-                    <dt class="text-sm font-medium text-gray-500 truncate">
+                    <dt class="text-sm font-medium text-gray-900 truncate">
                       Current Balance
                     </dt>
                     <dd
@@ -686,6 +686,7 @@ interface BudgetStatusItem {
 }
 
 interface TransactionSummary {
+  currentBalance: number;
   currentMonthSummary: CurrentMonthSummary;
   expenseByCategory: ExpenseByCategoryItem[];
   monthlyTrends: MonthlyTrendItem[];
@@ -718,7 +719,7 @@ const totalExpense = computed(() => {
 });
 
 const currentBalance = computed(() => {
-  return transactionSummary.value?.currentMonthSummary.balance || 0;
+  return transactionSummary.value?.currentBalance || 0;
 });
 
 const recentTransactions = computed(() => {
