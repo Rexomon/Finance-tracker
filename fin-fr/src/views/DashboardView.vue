@@ -656,7 +656,6 @@ interface Transaction {
 interface CurrentMonthSummary {
   totalIncome: number;
   totalExpense: number;
-  balance: number;
 }
 
 interface ExpenseByCategoryItem {
