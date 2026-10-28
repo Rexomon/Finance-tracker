@@ -113,6 +113,21 @@ export function getTransactionSummaryQuery({ userId }: TTransactionUserId) {
   const endDate = new Date(year, month, 1);
   const sixMonthsAgoDate = new Date(year, month - 6, 1);
 
+  const currentBalanceQuery = db
+    .select({
+      totalIncome:
+        sql<number>`COALESCE(SUM(CASE WHEN ${transaction.type} = 'income' THEN ${transaction.amount} ELSE 0 END), 0)`.mapWith(
+          Number,
+        ),
+      totalExpense:
+        sql<number>`COALESCE(SUM(CASE WHEN ${transaction.type} = 'expense' THEN ${transaction.amount} ELSE 0 END), 0)`.mapWith(
+          Number,
+        ),
+    })
+    .from(transaction)
+    .innerJoin(category, eq(transaction.category, category.id))
+    .where(eq(category.userId, userId));
+
   const currentMonthSummaryQuery = db
     .select({
       totalIncome:
@@ -217,6 +232,7 @@ export function getTransactionSummaryQuery({ userId }: TTransactionUserId) {
     monthlyTrendsQuery,
     recentTransactionsQuery,
     currentMonthBudgetsQuery,
+    currentBalanceQuery,
   };
 }
 

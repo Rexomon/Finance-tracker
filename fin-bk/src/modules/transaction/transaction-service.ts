@@ -160,12 +160,14 @@ export const getTransactionSummaryService = async ({
       monthlyTrends,
       recentTransactionRows,
       currentMonthBudgetRows,
+      [currentBalanceRows],
     ] = await Promise.all([
       transactionSummaryQueries.currentMonthSummaryQuery,
       transactionSummaryQueries.currentMonthExpenseByCategoryQuery,
       transactionSummaryQueries.monthlyTrendsQuery,
       transactionSummaryQueries.recentTransactionsQuery,
       transactionSummaryQueries.currentMonthBudgetsQuery,
+      transactionSummaryQueries.currentBalanceQuery,
     ]);
 
     return {
@@ -174,6 +176,7 @@ export const getTransactionSummaryService = async ({
       monthlyTrends,
       recentTransactionRows,
       currentMonthBudgetRows,
+      currentBalanceRows,
     };
   });
   if (!transactionSummaryResult.success) {
@@ -187,6 +190,7 @@ export const getTransactionSummaryService = async ({
     monthlyTrends,
     recentTransactionRows,
     currentMonthBudgetRows,
+    currentBalanceRows,
   } = transactionSummaryResult.data;
 
   const spentMap = new Map<number, number>();
@@ -228,14 +232,14 @@ export const getTransactionSummaryService = async ({
     updatedAt: transactionRow.transaction.updatedAt,
   }));
 
-  const balance =
-    currentMonthSummary.totalIncome - currentMonthSummary.totalExpense;
+  const currentBalance =
+    currentBalanceRows.totalIncome - currentBalanceRows.totalExpense;
 
   const summary = {
+    currentBalance,
     currentMonthSummary: {
       totalIncome: currentMonthSummary.totalIncome || 0,
       totalExpense: currentMonthSummary.totalExpense || 0,
-      balance: balance,
     },
     expenseByCategory: currentMonthExpenseByCategory,
     monthlyTrends,
